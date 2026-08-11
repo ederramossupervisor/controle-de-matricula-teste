@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Teste de Login</title>
+</head>
+<body style="font-family: sans-serif; max-width: 400px; margin: 40px auto;">
+  <h2>Teste de Login</h2>
+  <input id="email" type="email" placeholder="E-mail" style="width:100%; padding:8px; margin-bottom:8px;"><br>
+  <input id="senha" type="password" placeholder="Senha" style="width:100%; padding:8px; margin-bottom:8px;"><br>
+  <button onclick="testarLogin()" style="padding:8px 16px;">Entrar</button>
+  <pre id="resultado" style="background:#f4f4f4; padding:12px; margin-top:16px;"></pre>
+
+  <script>
+    async function testarLogin() {
+      const email = document.getElementById('email').value;
+      const senha = document.getElementById('senha').value;
+      const resp = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, senha })
+      });
+      const dados = await resp.json();
+      document.getElementById('resultado').textContent = JSON.stringify(dados, null, 2);
+    }
+  </script>
+</body>
+</html>
