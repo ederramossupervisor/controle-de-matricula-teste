@@ -42,12 +42,14 @@ export default async function handler(req, res) {
     escolasSupervisionadas = (escolas || []).map(e => e.escola);
   }
 
+const EMAIL_ADMINISTRADOR = 'eder.ramos@educador.edu.es.gov.br';
+
   return res.status(200).json({
     autorizado: true,
     perfil: usuario.perfil,
     escola: usuario.escola,
     nome: usuario.nome || '',
     primeiroAcesso: usuario.primeiro_acesso === true,
-    escolasSupervisionadas
+    escolasSupervisionadas,
+    ehAdministrador: usuario.email.trim().toLowerCase() === EMAIL_ADMINISTRADOR
   });
-}
