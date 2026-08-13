@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Teste de Atualização de Documento</title>
+</head>
+<body style="font-family: sans-serif; max-width: 400px; margin: 40px auto;">
+  <h2>Teste de Documento</h2>
+  <input id="email" placeholder="Seu e-mail" style="width:100%; padding:8px; margin-bottom:8px;"><br>
+  <input id="codigo" placeholder="Código do aluno (ex: KQ099)" style="width:100%; padding:8px; margin-bottom:8px;"><br>
+  <select id="campo" style="width:100%; padding:8px; margin-bottom:8px;">
+    <option value="certidao_entregue">Certidão</option>
+    <option value="cpf_entregue">CPF</option>
+    <option value="rg_entregue">RG</option>
+    <option value="vacina_entregue">Vacina</option>
+    <option value="sus_entregue">SUS</option>
+    <option value="residencia_entregue">Residência</option>
+    <option value="resp_docs_entregue">Docs do Responsável</option>
+    <option value="historico_entregue">Histórico</option>
+    <option value="decl_transf_entregue">Decl. Transferência</option>
+  </select>
+  <label><input type="checkbox" id="valor"> Documento entregue</label><br><br>
+  <button onclick="testarAtualizacao()" style="padding:8px 16px;">Atualizar</button>
+  <pre id="resultado" style="background:#f4f4f4; padding:12px; margin-top:16px;"></pre>
+
+  <script>
+    async function testarAtualizacao() {
+      const corpo = {
+        email: document.getElementById('email').value,
+        codigo: document.getElementById('codigo').value,
+        campo: document.getElementById('campo').value,
+        valor: document.getElementById('valor').checked
+      };
+      const resp = await fetch('/api/atualizar-documento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(corpo)
+      });
+      const dados = await resp.json();
+      document.getElementById('resultado').textContent = JSON.stringify(dados, null, 2);
+    }
+  </script>
+</body>
+</html>
