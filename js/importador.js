@@ -62,7 +62,7 @@ const ImportProgress = {
       total: alunos.length,
       enviados: 0,
       loteAtual: 0,
-      loteSize: 50,
+      loteSize: 200,
       titulo: titulo || 'Importando alunos...',
       dataInicio: Date.now()
     };
@@ -126,7 +126,13 @@ const ImportProgress = {
         const tempoRestante = velocidade > 0 ? Math.ceil(faltam / velocidade) : 0;
         self.atualizarUI(estado.enviados, estado.total, tempoRestante);
 
-        self.timer = setTimeout(() => self.processarLote(estado), 1000);
+        self.timer = setTimeout(() => self.processarLote(estado), 300);
+      },
+      (erro) => {
+        // Falha: interrompe e limpa para não tentar de novo sozinho
+        self.atualizarUI(estado.enviados, estado.total, 0, false, true);
+        self.limpar();
+        mostrarToast('Importação interrompida por um erro. O que já foi enviado permanece.', 'error');
       }
     );
   },
@@ -140,7 +146,9 @@ const ImportProgress = {
       const btn = document.getElementById('btnDesfazerImport');
       if (btn) btn.style.display = 'none';
     }, 12000); // A barra some após 12 segundos, dando tempo para clicar em Desfazer
-    mostrarToast(`${estado.titulo} concluída! ${estado.total} alunos processados.`, 'success');
+    const r = window._resumoImport;
+    const detalhe = r ? ` (${r.importados} novos, ${r.duplicatas} já existiam, ${r.falhas} ignorados)` : '';
+    mostrarToast(`${estado.titulo} concluída! ${estado.total} alunos processados.${detalhe}`, 'success');
     if (typeof carregarAlunos === 'function') carregarAlunos();
     if (typeof fecharModalImportacao === 'function') fecharModalImportacao();
     if (typeof fecharModalPromocao === 'function') fecharModalPromocao();

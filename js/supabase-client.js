@@ -381,19 +381,270 @@ const ACAO_ALUNO_SB = {
   }
 };
 
+
+// ------------------------------------------------------------
+// TURMAS
+// ------------------------------------------------------------
+async function listarTurmasSb(escola) {
+  let q = sb.from('turmas').select('id, escola, nome, legacy_id').order('escola').order('nome');
+  if (escola) q = q.eq('escola', escola);
+  const { data, error } = await q;
+  if (error) { console.error('Erro ao listar turmas:', error); return []; }
+  return data.map(function (t) { return { escola: t.escola, turma: t.nome, id: t.legacy_id || t.id }; });
+}
+
+async function garantirTurmasSb(escola, turmas) {
+  const nomes = Array.from(new Set((turmas || []).map(function (t) { return (t || '').toString().trim(); }).filter(Boolean)));
+  if (!nomes.length) return 0;
+  const { data, error } = await sb.from('turmas')
+    .upsert(nomes.map(function (nome) { return { escola: escola, nome: nome }; }), { onConflict: 'escola,nome', ignoreDuplicates: true })
+    .select('id');
+  if (error) throw error;
+  return data.length;
+}
+
+// As telas pedem turmas via jsonp(...tipo=turmas...). Aqui desviamos esse pedido para o Supabase.
+const _jsonpLegado = jsonp;
+window.jsonp = function (url, callback) {
+  try {
+    const u = new URL(url);
+    if (u.searchParams.get('tipo') === 'turmas') {
+      listarTurmasSb(u.searchParams.get('escola') || '').then(callback);
+      return;
+    }
+  } catch (_) { /* URL inválida: segue o caminho antigo */ }
+  return _jsonpLegado.apply(this, arguments);
+};
+
+// ------------------------------------------------------------
+// IMPORTAÇÃO / PROMOÇÃO
+// ------------------------------------------------------------
+function normEscolaSb(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+// escolas em que o usuário PODE gravar (mesma regra do banco)
+async function mapaEscolasEditaveisSb() {
+  const p = await carregarPerfilSb();
+  let nomes = [];
+  if (p.is_admin) {
+    const { data, error } = await sb.from('escolas').select('nome');
+    if (error) throw error;
+    nomes = data.map(function (e) { return e.nome; });
+  } else {
+    if ((p.perfis || []).includes('SUPERVISOR')) nomes = nomes.concat(p.escolas_supervisionadas || []);
+    if ((p.perfis || []).includes('SECRETARIA') && p.escola) nomes.push(p.escola);
+  }
+  const mapa = {};
+  nomes.forEach(function (n) { mapa[normEscolaSb(n)] = n; });
+  return mapa;
+}
+
+function txtOuNulo(v) {
+  if (v === undefined || v === null) return null;
+  const t = String(v).trim();
+  return t === '' ? null : t;
+}
+
+function linhaNovoAlunoSb(a, escola, codigo, opt) {
+  const dm = paraDataIso(a.dataMatricula) || hojeSaoPaulo();
+  const cpf = cpfFormatado(a.cpfAluno !== undefined ? a.cpfAluno : a.cpf);
+  const turma = txtOuNulo(a.turma);
+  const linha = {
+    codigo: codigo, escola: escola, nome: String(a.nome).trim(),
+    responsavel: txtOuNulo(a.responsavel), telefone: txtOuNulo(a.telefone), turma: turma,
+    data_matricula: dm, prazo_final: somarDias(dm, 30),
+    cpf_numero: cpf, cpf_entregue: cpf !== null,
+    raca_cor: racaCorSb(a.racaCor),
+    filiacao_1: txtOuNulo(a.filiacao1), filiacao_2: txtOuNulo(a.filiacao2),
+    data_nascimento: paraDataIso(a.dataNascimento),
+    naturalidade: txtOuNulo(a.naturalidade), uf_nascimento: txtOuNulo(a.ufNascimento), nacionalidade: txtOuNulo(a.nacionalidade),
+    situacao: opt.situacaoPorTurma ? (turma ? 'Ativo' : 'Inativo') : 'Ativo',
+    ed_especial: a.edEspecial === true
+  };
+  if (opt.docsDoCsv) {
+    linha.certidao_entregue = txtOuNulo(a.certidao) !== null;
+    linha.rg_entregue = txtOuNulo(a.rg) !== null;
+    linha.sus_entregue = txtOuNulo(a.sus) !== null;
+    linha.residencia_entregue = txtOuNulo(a.residencia) !== null;
+  }
+  return linha;
+}
+
+async function inserirAlunosSb(alunos, opt) {
+  const escolas = await mapaEscolasEditaveisSb();
+  const r = { importados: 0, duplicatas: 0, falhas: 0 };
+  const porEscola = {};
+  (alunos || []).forEach(function (a) {
+    const esc = escolas[normEscolaSb(a.escola)];
+    const nome = txtOuNulo(a.nome);
+    const id = txtOuNulo(a.id);
+    if (!esc || !nome || (opt.exigeId && !id)) { r.falhas++; return; }
+    (porEscola[esc] = porEscola[esc] || []).push({ a: a, id: id });
+  });
+
+  for (const esc of Object.keys(porEscola)) {
+    const itens = porEscola[esc];
+    await garantirTurmasSb(esc, itens.map(function (i) { return i.a.turma; }));
+
+    // com ID: ignora quem já existe
+    const vistos = new Set();
+    const comId = [];
+    itens.filter(function (i) { return i.id; }).forEach(function (i) {
+      if (vistos.has(i.id)) { r.duplicatas++; return; }
+      vistos.add(i.id);
+      comId.push(linhaNovoAlunoSb(i.a, esc, i.id, opt));
+    });
+    if (comId.length) {
+      const { data, error } = await sb.from('alunos')
+        .upsert(comId, { onConflict: 'escola,codigo', ignoreDuplicates: true }).select('seq');
+      if (error) throw error;
+      r.importados += data.length;
+      r.duplicatas += comId.length - data.length;
+    }
+
+    // sem ID: gera código novo (repete se por acaso já existir)
+    const semId = itens.filter(function (i) { return !i.id; });
+    if (semId.length) {
+      let ok = false;
+      for (let t = 0; t < 6 && !ok; t++) {
+        const usados = new Set();
+        const linhas = semId.map(function (i) {
+          let c; do { c = gerarCodigoAluno(); } while (usados.has(c));
+          usados.add(c);
+          return linhaNovoAlunoSb(i.a, esc, c, opt);
+        });
+        const { data, error } = await sb.from('alunos').insert(linhas).select('seq');
+        if (!error) { r.importados += data.length; ok = true; }
+        else if (error.code !== '23505') throw error;
+      }
+      if (!ok) throw new Error('Não foi possível gerar códigos únicos para alunos sem ID.');
+    }
+  }
+  return r;
+}
+
+async function promoverAlunosSb(alunos) {
+  const escolas = await mapaEscolasEditaveisSb();
+  let atualizados = 0, novos = [], falhas = 0;
+  const porEscola = {};
+  (alunos || []).forEach(function (a) {
+    const esc = escolas[normEscolaSb(a.escola)];
+    const id = txtOuNulo(a.id);
+    if (!esc || !id || !txtOuNulo(a.nome)) { falhas++; return; }
+    (porEscola[esc] = porEscola[esc] || []).push({ a: a, id: id });
+  });
+
+  for (const esc of Object.keys(porEscola)) {
+    const itens = porEscola[esc];
+    await garantirTurmasSb(esc, itens.map(function (i) { return i.a.turma; }));
+    const { data, error } = await sb.from('alunos').select('codigo').eq('escola', esc)
+      .in('codigo', itens.map(function (i) { return i.id; }));
+    if (error) throw error;
+    const existentes = new Set(data.map(function (x) { return x.codigo; }));
+
+    const paraAtualizar = itens.filter(function (i) { return existentes.has(i.id); });
+    for (let k = 0; k < paraAtualizar.length; k += 10) {
+      await Promise.all(paraAtualizar.slice(k, k + 10).map(function (i) {
+        return sb.from('alunos').update({ turma: txtOuNulo(i.a.turma), situacao: 'Ativo' })
+          .eq('escola', esc).eq('codigo', i.id)
+          .then(function (res) { if (res.error) throw res.error; });
+      }));
+    }
+    atualizados += paraAtualizar.length;
+    itens.filter(function (i) { return !existentes.has(i.id); }).forEach(function (i) { novos.push(i.a); });
+  }
+
+  let criados = 0;
+  if (novos.length) {
+    const r = await inserirAlunosSb(novos, { exigeId: true, situacaoPorTurma: false, docsDoCsv: false });
+    criados = r.importados;
+    falhas += r.falhas;
+  }
+  return { atualizados: atualizados, criados: criados, falhas: falhas };
+}
+
+async function finalizarPromocaoSb(alunos) {
+  const escolas = await mapaEscolasEditaveisSb();
+  const idsPorEscola = {};
+  (alunos || []).forEach(function (a) {
+    const esc = escolas[normEscolaSb(a.escola)];
+    const id = txtOuNulo(a.id);
+    if (!esc || !id) return;
+    (idsPorEscola[esc] = idsPorEscola[esc] || new Set()).add(id);
+  });
+
+  let marcados = 0;
+  for (const esc of Object.keys(idsPorEscola)) {
+    const ativos = [];
+    for (let de = 0; ; de += 1000) {
+      const { data, error } = await sb.from('alunos').select('codigo').eq('escola', esc).eq('situacao', 'Ativo')
+        .order('seq').range(de, de + 999);
+      if (error) throw error;
+      data.forEach(function (x) { ativos.push(x.codigo); });
+      if (data.length < 1000) break;
+    }
+    const sair = ativos.filter(function (c) { return !idsPorEscola[esc].has(c); });
+    for (let k = 0; k < sair.length; k += 80) {
+      const { error } = await sb.from('alunos').update({ situacao: 'Transferido' })
+        .eq('escola', esc).eq('situacao', 'Ativo').in('codigo', sair.slice(k, k + 80));
+      if (error) throw error;
+    }
+    marcados += sair.length;
+  }
+  return marcados;
+}
+
+Object.assign(ACAO_ALUNO_SB, {
+  async cadastrarTurma(d) {
+    const p = await carregarPerfilSb();
+    const podeEscolher = p.is_admin || (p.perfis || []).includes('SUPERVISOR');
+    const escola = podeEscolher ? d.escola : p.escola;
+    const nome = (d.turma || '').toString().trim();
+    if (!escola || !nome) throw new Error('Escola e turma são obrigatórias.');
+    const { error } = await sb.from('turmas').insert({ escola: escola, nome: nome });
+    if (error) {
+      if (error.code === '23505') throw new Error('Turma já cadastrada para esta escola.');
+      throw error;
+    }
+  },
+
+  async importarAlunosLote(d) {
+    const r = await inserirAlunosSb(d.alunos, { exigeId: false, situacaoPorTurma: true, docsDoCsv: true });
+    const acc = window._resumoImport = window._resumoImport || { importados: 0, duplicatas: 0, falhas: 0 };
+    acc.importados += r.importados; acc.duplicatas += r.duplicatas; acc.falhas += r.falhas;
+  },
+
+  async inserirNovosAlunosLote(d) {
+    await inserirAlunosSb(d.alunos, { exigeId: true, situacaoPorTurma: false, docsDoCsv: false });
+  },
+
+  async promoverAlunosLote(d) {
+    await promoverAlunosSb(d.alunos);
+  },
+
+  async finalizarPromocao(d) {
+    await finalizarPromocaoSb(d.alunos);
+  },
+
+  // A importação por arquivo agora roda direto, com barra de progresso (sem fila na planilha)
+  async enviarCSVParaFila(d) {
+    window._resumoImport = { importados: 0, duplicatas: 0, falhas: 0 };
+    ImportProgress.iniciar(d.alunos || [], 'importarAlunosLote', 'Importando alunos...');
+  }
+});
+
 // Ações ainda não migradas: bloqueadas para NÃO gravar na planilha por engano
 // enquanto a leitura já vem do Supabase (as duas bases ficariam diferentes).
-const ACOES_ALUNOS_PENDENTES = new Set([
-  'importarDaAbaTemp', 'enviarCSVParaFila', 'importarAlunosLote',
-  'promoverAlunosLote', 'inserirNovosAlunosLote', 'finalizarPromocao'
-]);
+const ACOES_ALUNOS_PENDENTES = new Set(['importarDaAbaTemp']);
 
 const _postSemRespostaLegado = postSemResposta;
 window.postSemResposta = function (dados, msgSucesso, callback, aoFalhar) {
   if (dados && ACOES_ALUNOS_PENDENTES.has(dados.acao)) {
     try { ImportProgress.limpar(); ImportProgress.esconder(); } catch (_) {}
     if (typeof esconderLoading === 'function') esconderLoading();
-    mostrarToast('Importação e promoção de alunos ainda não foram migradas para o novo servidor.', 'warning');
+    mostrarToast('A importação pela aba IMPORT_TEMP da planilha foi desativada. Use a importação por arquivo CSV.', 'warning');
     return;
   }
   if (dados && ACAO_ALUNO_SB[dados.acao]) {
@@ -404,6 +655,7 @@ window.postSemResposta = function (dados, msgSucesso, callback, aoFalhar) {
 };
 
 async function executarAcaoAlunoSb(dados, msgSucesso, callback, aoFalhar) {
+  if (dados.acao === 'enviarCSVParaFila') msgSucesso = null;
   const btn = window._clickedButton;
   if (btn && typeof showButtonLoading === 'function') showButtonLoading(btn);
   try {

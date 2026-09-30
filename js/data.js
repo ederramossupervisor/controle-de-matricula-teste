@@ -2040,8 +2040,8 @@ function executarPromocaoCSV() {
   const statusDiv = document.getElementById('statusPromocao');
   showButtonLoading(btn);
 
-  const loteSize = 50;
-  const atrasoEntreLotes = 2000;
+  const loteSize = 200;
+  const atrasoEntreLotes = 200;
   let totalEnviados = 0;
 
   (async () => {
@@ -2062,7 +2062,8 @@ function executarPromocaoCSV() {
               statusDiv.innerHTML = `Enviando lote ${Math.floor(i / loteSize) + 1} de ${Math.ceil(alunosPromocao.length / loteSize)}...`;
             }
             resolve();
-          }
+          },
+          () => { hideButtonLoading(btn); }
         );
       });
 
@@ -2080,7 +2081,8 @@ function executarPromocaoCSV() {
         null,
         () => {
           resolve();
-        }
+        },
+        () => { hideButtonLoading(btn); }
       );
     });
 
@@ -2185,8 +2187,8 @@ function executarAtualizarMatriculados() {
   const statusDiv = document.getElementById('statusAtualizar');
   showButtonLoading(btn);
 
-  const loteSize = 50;
-  const atrasoEntreLotes = 2000;
+  const loteSize = 200;
+  const atrasoEntreLotes = 200;
   let totalEnviados = 0;
 
   (async () => {
@@ -2207,7 +2209,8 @@ function executarAtualizarMatriculados() {
               statusDiv.innerHTML = `Enviando lote ${Math.floor(i / loteSize) + 1} de ${Math.ceil(alunosAtualizar.length / loteSize)}...`;
             }
             resolve();
-          }
+          },
+          () => { hideButtonLoading(btn); }
         );
       });
 
