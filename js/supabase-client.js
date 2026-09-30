@@ -664,6 +664,7 @@ async function executarAcaoAlunoSb(dados, msgSucesso, callback, aoFalhar) {
     if (callback) callback();
   } catch (e) {
     console.error('Erro em ' + dados.acao + ':', e);
+    if (typeof esconderLoading === 'function') esconderLoading();
     mostrarToast(mensagemErroSb(e), 'error');
     if (aoFalhar) aoFalhar(e);
   } finally {

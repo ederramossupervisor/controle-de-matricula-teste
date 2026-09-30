@@ -4,7 +4,7 @@
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>const APP_VERSION = 'v3.1.0-sb1';</script>  
+<script>const APP_VERSION = 'v3.1.0-sb2';</script>  
 <script>
   // Se este arquivo foi aberto direto (atalho/favorito salvo aponta para
   // app_v2.html em vez da raiz do site), a rotina de limpeza de cache e
@@ -3061,5 +3061,18 @@ if ('serviceWorker' in navigator) {
   })();
 </script>
 
+
+  <!-- Barra de progresso de importação (usada por js/importador.js) -->
+  <div id="importProgressContainer" style="display:none; position:fixed; right:16px; bottom:16px; z-index:10050; width:320px; max-width:calc(100vw - 32px); background:#fff; color:#0f172a; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.18); padding:14px 16px; font-size:14px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+      <strong id="importProgressTitle">Importando alunos...</strong>
+      <button type="button" onclick="fecharProgressoImportacao()" aria-label="Interromper importação" style="border:none; background:transparent; font-size:18px; line-height:1; cursor:pointer; color:#64748b;">&times;</button>
+    </div>
+    <div style="height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden; margin:10px 0 6px;">
+      <div id="importProgressBar" style="height:100%; width:0; background:#16a34a; transition:width .3s;"></div>
+    </div>
+    <div id="importProgressText"></div>
+    <div id="importProgressTime" style="color:#64748b; font-size:12px; margin-bottom:6px;"></div>
+  </div>
 </body>
 </html>
