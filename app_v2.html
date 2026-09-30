@@ -14,7 +14,7 @@
   (function() {
     try {
       const versaoSalva = localStorage.getItem('app_version');
-      if (versaoSalva !== APP_VERSION) {
+      if (versaoSalva !== APP_VERSION && !/access_token|type=recovery|error_code/.test(window.location.hash)) {
         window.location.replace('./index.html');
       }
     } catch (e) {
