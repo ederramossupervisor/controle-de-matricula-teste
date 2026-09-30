@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Carregando...</title>
+</head>
+<body>
+  <h1 style="text-align:center; margin-top:40vh; font-family:sans-serif;">Atualizando o sistema...</h1>
+  <script>
+    const APP_VERSION = 'v3.1.0-sb1'; // ← incremente sempre que fizer um novo deploy
+
+    // Desregistra TODOS os Service Workers ativos para este site.
+    // Isso é essencial mesmo quando a versão "bate": um SW antigo que ficou
+    // preso (ex.: de antes da mudança para fetch/loader.js) pode continuar
+    // controlando a página e servindo respostas antigas mesmo depois do
+    // deploy novo, porque o navegador só verifica a versão do SW quando o
+    // HTML que o registra é buscado — e é exatamente esse HTML que pode
+    // estar vindo do cache. Desregistrar aqui garante que, na próxima
+    // navegação, não existe mais nenhum SW interceptando requisições.
+    async function desregistrarServiceWorkersAntigos() {
+      try {
+        if ('serviceWorker' in navigator) {
+          const registros = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registros.map(reg => reg.unregister()));
+        }
+      } catch (e) {
+        console.warn('Falha ao desregistrar Service Workers:', e);
+      }
+    }
+
+    async function limparTudoEIr() {
+      try {
+        if ('caches' in window) {
+          const nomes = await caches.keys();
+          await Promise.all(nomes.map(nome => caches.delete(nome)));
+        }
+      } catch (e) {
+        console.warn('Limpeza parcial:', e);
+      }
+      await desregistrarServiceWorkersAntigos();
+      localStorage.setItem('app_version', APP_VERSION);
+      window.location.href = './app_v2.html?_=' + Date.now();
+    }
+
+    (async function iniciar() {
+      const versaoSalva = localStorage.getItem('app_version');
+      if (versaoSalva === APP_VERSION) {
+        // Mesmo com a versão batendo, garante que não sobrou nenhum SW
+        // órfão de um deploy anterior antes de seguir para o app.
+        await desregistrarServiceWorkersAntigos();
+        window.location.href = './app_v2.html?_=' + Date.now();
+      } else {
+        limparTudoEIr();
+      }
+    })();
+  </script>
+</body>
+</html>

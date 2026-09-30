@@ -1,0 +1,3065 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<script>const APP_VERSION = 'v3.1.0-sb1';</script>  
+<script>
+  // Se este arquivo foi aberto direto (atalho/favorito salvo aponta para
+  // app_v2.html em vez da raiz do site), a rotina de limpeza de cache e
+  // Service Workers antigos do index.html nunca roda. Para evitar isso,
+  // se a versão salva no localStorage não bate com a atual, manda para
+  // index.html primeiro — ele faz a limpeza e só então volta para cá.
+  (function() {
+    try {
+      const versaoSalva = localStorage.getItem('app_version');
+      if (versaoSalva !== APP_VERSION) {
+        window.location.replace('./index.html');
+      }
+    } catch (e) {
+      // Se localStorage não estiver disponível por algum motivo, segue o carregamento normal.
+    }
+  })();
+</script>
+  <meta charset="UTF-8">
+  <title>SECRETARIA ESCOLAR - SREAC</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="style.css?v=" id="estiloPrincipal">
+  <script>document.getElementById('estiloPrincipal').href += APP_VERSION;</script>
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+  <!-- Tema da barra de status (para dispositivos móveis) -->
+  <meta name="theme-color" content="#2563eb">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Matrículas">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+</head>
+
+<body>
+  <!-- Barra de progresso sutil (NProgress-like) -->
+<div id="nprogress" style="position:fixed;top:0;left:0;width:100%;height:3px;z-index:9999;pointer-events:none;">
+  <div id="nprogress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#2563eb,#60a5fa,#2563eb);background-size:200% 100%;transition:width 0.3s ease;"></div>
+</div>
+  <body>
+  <div id="loading">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- SPLASH SCREEN -->
+  <div id="splash" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(145deg, #1e3a8a, #2563eb); display: flex; align-items: center; justify-content: center; z-index: 9999; overflow: hidden;">
+    <!-- Partículas com nomes das escolas -->
+    <div id="splashEscolas" class="escola-grid"></div>
+    
+    <!-- Conteúdo central (logo, spinner, etc.) -->
+    <div class="splash-content" style="position: relative; z-index: 2; text-align: center;">
+      <img src="img/logo-sre-ac.png" alt="SRE Afonso Cláudio" style="width: 120px; margin-bottom: 8px;">
+      <p style="color: #c4c2b3; font-weight: 500; font-size: 1.4rem; margin-top: 0.5px;">
+        Carregando<span class="pontos-animados">...</span>
+      </p>
+      <p id="splashDica" style="color: rgba(0,0,0,0.7); margin-top: 20px; font-size: 14px; max-width: 280px; line-height: 1.4;"></p>
+    </div>
+    <div class="splash-particles" id="splashParticles"></div>
+  </div>
+
+  <!-- 🔐 LOGIN -->
+  <div id="login">
+      <div id="loginParticles" class="escola-grid"></div>
+    <div class="login-container">
+      <div class="login-card">
+        <div class="login-avatar" style="background-image: url('img/logo-sre-ac.png'); background-size: contain; background-repeat: no-repeat; background-position: center;">
+          <!-- opcional: deixar o ícone como fallback -->
+          <i class="fas fa-school" style="display:none;"></i>
+        </div>
+        <h2>Secretaria Escolar</h2>
+        <p class="login-subtitle">Acesse com seu e-mail institucional</p>
+  
+       <div class="input-icon">
+        <span class="icon"><i class="fas fa-envelope"></i></span>
+        <input type="email" id="email" placeholder="escola@sedu.es.gov.br" autofocus onkeypress="if(event.key==='Enter') login()">
+      </div>
+      <div class="input-icon">
+        <span class="icon"><i class="fas fa-lock"></i></span>
+          <input type="password" id="senha" placeholder="Senha" onkeypress="if(event.key==='Enter') login()">
+        <span class="toggle-password" onclick="toggleSenha(this)">
+          <i class="far fa-eye"></i>
+        </span>
+      </div>
+      <button onclick="login()"><i class="fas fa-sign-in-alt"></i> Entrar no sistema</button>
+      <p style="font-size:12px; color: #171212; margin-top:8px; cursor:pointer;" onclick="recuperarSenha()">
+        <i class="fas fa-question-circle"></i> Esqueci minha senha
+      </p>
+  
+        <!-- Seção de Ajuda -->
+        <div class="login-ajuda">
+          <a href="manual.html" target="_blank" class="link-ajuda">
+            <i class="fas fa-question-circle"></i> Manual do Sistema
+          </a>
+          </div>
+  
+        <p class="login-footer">Secretaria Escolar • SRE Afonso Cláudio</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 📋 APP -->
+  <div id="app" style="display:none;">
+    <!-- ➕ MODAL DE CADASTRO DE ALUNO -->
+    <div id="novoAluno" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--fullscreen">
+        <div class="modal-header">
+          <h2><i class="fas fa-user-plus"></i> Novo Aluno</h2>
+          <button class="close-btn" onclick="voltarApp()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="info-escola" id="infoEscolaCadastro">
+            <span><i class="fas fa-school"></i></span>
+            <span id="escolaVinculada">Carregando...</span>
+          </div>
+  
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-user"></i></span>
+            <input type="text" id="nomeAluno" placeholder="Nome completo do aluno" autofocus>
+          </div>
+  
+          <!-- NOVOS CAMPOS -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-user-friends"></i></span>
+            <input type="text" id="nomeResponsavel" placeholder="Nome do responsável">
+          </div>
+          <div id="telefonesContainerCadastro">
+          <div class="input-icon" style="margin-bottom: 8px;">
+            <span class="icon"><i class="fas fa-phone-alt"></i></span>
+            <input type="tel" class="telefone-cadastro" placeholder="Telefone principal" oninput="aplicarMascaraTelefone(event)">
+          </div>
+        </div>
+        <button type="button" class="btn-pequeno" onclick="adicionarCampoTelefoneCadastro()" style="margin-bottom: 16px;">
+          <i class="fas fa-plus"></i> Adicionar outro telefone
+        </button>
+  
+          <!-- CAMPO DATA DE MATRÍCULA -->
+          <div class="input-icon" style="margin-bottom: 8px;">
+            <span class="icon"><i class="fas fa-calendar-alt"></i></span>
+            <input type="date" id="dataMatricula" style="padding-left: 50px;">
+          </div>
+          <div style="display: flex; justify-content: flex-end; margin-top: -8px; margin-bottom: 12px;">
+            <button type="button" class="btn-pequeno" onclick="preencherDataHoje()">Hoje</button>
+          </div>
+  
+          <!-- CAMPO TURMA -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-book"></i></span>
+            <select id="selectTurmaAluno" style="padding-left: 50px;">
+              <option value="">Selecione a turma</option>
+            </select>
+          </div>
+          <!-- ID DO ALUNO (SEGES) -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-id-badge"></i></span>
+            <input type="text" id="idAlunoCadastro" placeholder="ID do aluno no SEGES (opcional)">
+          </div>
+          <!-- CPF -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-id-card"></i></span>
+            <input type="text" id="cpfNumeroCadastro" placeholder="CPF" oninput="aplicarMascaraCPF(this); validarCampoCPF(this)">
+          </div>
+
+          <!-- RAÇA/COR -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-palette"></i></span>
+            <select id="racaCorCadastro">
+              <option value="">Raça/Cor (opcional)</option>
+              <option value="Branca">Branca</option>
+              <option value="Preta">Preta</option>
+              <option value="Parda">Parda</option>
+              <option value="Indígena">Indígena</option>
+              <option value="Amarela">Amarela</option>
+            </select>
+          </div>
+
+          <!-- FILIAÇÃO 1 -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-user-friends"></i></span>
+            <input type="text" id="filiacao1Cadastro" placeholder="Filiação 1 (ex.: Mãe)">
+          </div>
+          <!-- FILIAÇÃO 2 -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-user-friends"></i></span>
+            <input type="text" id="filiacao2Cadastro" placeholder="Filiação 2 (ex.: Pai)">
+          </div>
+          <!-- DATA DE NASCIMENTO -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-calendar-alt"></i></span>
+            <input type="date" id="dataNascimentoCadastro">
+            <small style="display: block; margin-top: 2px; font-size: 11px; color: var(--text-muted);">
+              Data de nascimento do estudante
+            </small>
+          </div>
+          <!-- NATURALIDADE -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-map-marker-alt"></i></span>
+            <input type="text" id="naturalidadeCadastro" placeholder="Naturalidade (cidade)">
+          </div>
+          <!-- UF DE NASCIMENTO -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-flag"></i></span>
+            <select id="ufNascimentoCadastro">
+              <option value="">UF de nascimento</option>
+              <option value="AC">AC</option>
+              <option value="AL">AL</option>
+              <option value="AP">AP</option>
+              <option value="AM">AM</option>
+              <option value="BA">BA</option>
+              <option value="CE">CE</option>
+              <option value="DF">DF</option>
+              <option value="ES">ES</option>
+              <option value="GO">GO</option>
+              <option value="MA">MA</option>
+              <option value="MT">MT</option>
+              <option value="MS">MS</option>
+              <option value="MG">MG</option>
+              <option value="PA">PA</option>
+              <option value="PB">PB</option>
+              <option value="PR">PR</option>
+              <option value="PE">PE</option>
+              <option value="PI">PI</option>
+              <option value="RJ">RJ</option>
+              <option value="RN">RN</option>
+              <option value="RS">RS</option>
+              <option value="RO">RO</option>
+              <option value="RR">RR</option>
+              <option value="SC">SC</option>
+              <option value="SP">SP</option>
+              <option value="SE">SE</option>
+              <option value="TO">TO</option>
+            </select>
+          </div>
+          <!-- NACIONALIDADE -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-globe"></i></span>
+            <input type="text" id="nacionalidadeCadastro" placeholder="Nacionalidade (ex.: Brasileira)">
+          </div>
+  
+          <div class="checkbox-moderno" style="margin-top: 16px;">
+            <input type="checkbox" id="alunoEdEspecial">
+            <label for="alunoEdEspecial" style="font-weight: 500;"><i class="fas fa-puzzle-piece"></i> Aluno público da Educação Especial</label>
+          </div>
+
+          <div style="margin-top: 16px;">
+            <label for="observacoesNovoAluno" style="font-weight: 500; display: block; margin-bottom: 8px;">
+              <i class="fas fa-pencil-alt"></i> Observações (opcional):
+            </label>
+            <textarea id="observacoesNovoAluno" rows="2" style="width: 100%; padding: 8px; border-radius: 12px; border: 1px solid var(--input-border); background: var(--input-bg);"></textarea>
+          </div>
+  
+          <div class="error-msg" id="erroNome" style="display:none;"><i class="fas fa-exclamation-triangle"></i> Nome do aluno obrigatório</div>
+  
+          <div class="modal-actions">
+            <button class="btn-salvar" id="btnSalvarAluno" onclick="salvarAluno()">
+              <span class="btn-text">Salvar</span>
+              <span class="spinner-btn" style="display:none;"></span>
+            </button>
+            <button class="btn-cancelar" onclick="voltarApp()">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- 🔍 MODAL DE DETALHES DO ALUNO -->
+    <div id="modalDetalhes" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande modal-card--fullscreen">
+        <div class="modal-header">
+          <h2 id="detalhesTitulo">Carregando...</h2>
+          <button class="close-btn" onclick="fecharModalDetalhes()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <!-- DADOS EDITÁVEIS DO ALUNO -->
+          <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;">
+            <h3 style="margin-bottom: 12px;"><i class="fas fa-info-circle"></i> Informações do Aluno</h3>
+            
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-user"></i></span>
+              <input type="text" id="editNomeAluno" placeholder="Nome completo">
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 12px; margin: 12px 0;">
+              <div id="fotoAlunoContainer" style="position: relative; cursor: pointer; width: 64px; height: 64px;" title="Clique para alterar a foto">
+                <img id="fotoAlunoPreview" src="" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid var(--card-border); display: none;" alt="Foto do aluno">
+                <div id="fotoAlunoInicial" style="width: 64px; height: 64px; border-radius: 50%; background: #e0e7ff; color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; border: 2px solid var(--card-border);"></div>
+                <!-- Ícone de câmera sobrepondo a foto/inicial -->
+                <div style="position: absolute; bottom: 0; right: 0; background: rgba(0,0,0,0.5); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
+                  <i class="fas fa-camera" style="color: white; font-size: 12px;"></i>
+                </div>
+              </div>
+              <div>
+                <button type="button" class="btn-pequeno" onclick="removerFotoAluno()"><i class="fas fa-trash"></i></button>
+              </div>
+            </div>
+
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-id-badge"></i></span>
+              <input type="text" id="editIdAluno" placeholder="ID do aluno no SEGES">
+            </div>
+            
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-user-friends"></i></span>
+              <input type="text" id="editResponsavel" placeholder="Nome do responsável">
+            </div>
+            
+            <div id="telefonesContainerEdicao">
+              <!-- Os campos serão preenchidos dinamicamente via JS -->
+            </div>
+            <button type="button" class="btn-pequeno" onclick="adicionarCampoTelefoneEdicao()" style="margin-bottom: 16px;">
+              <i class="fas fa-plus"></i> Adicionar outro telefone
+            </button>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-id-card"></i></span>
+              <input type="text" id="editCpfNumero" placeholder="CPF" oninput="aplicarMascaraCPF(this)">
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-palette"></i></span>
+              <select id="editRacaCor">
+                <option value="">Raça/Cor (opcional)</option>
+                <option value="Branca">Branca</option>
+                <option value="Preta">Preta</option>
+                <option value="Parda">Parda</option>
+                <option value="Indígena">Indígena</option>
+                <option value="Amarela">Amarela</option>
+              </select>
+            </div>
+
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-user-friends"></i></span>
+              <input type="text" id="editFiliacao1" placeholder="Filiação 1">
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-user-friends"></i></span>
+              <input type="text" id="editFiliacao2" placeholder="Filiação 2">
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-calendar-alt"></i></span>
+              <input type="date" id="editDataNascimento">
+              <small style="display: block; margin-top: 2px; font-size: 11px; color: var(--text-muted);">
+                Data de nascimento do estudante
+              </small>
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-map-marker-alt"></i></span>
+              <input type="text" id="editNaturalidade" placeholder="Naturalidade">
+            </div>
+            <!-- UF DE NASCIMENTO -->
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-flag"></i></span>
+              <select id="editUfNascimento">
+                <option value="">UF de nascimento</option>
+                <option value="AC">AC</option>
+                <option value="AL">AL</option>
+                <option value="AP">AP</option>
+                <option value="AM">AM</option>
+                <option value="BA">BA</option>
+                <option value="CE">CE</option>
+                <option value="DF">DF</option>
+                <option value="ES">ES</option>
+                <option value="GO">GO</option>
+                <option value="MA">MA</option>
+                <option value="MT">MT</option>
+                <option value="MS">MS</option>
+                <option value="MG">MG</option>
+                <option value="PA">PA</option>
+                <option value="PB">PB</option>
+                <option value="PR">PR</option>
+                <option value="PE">PE</option>
+                <option value="PI">PI</option>
+                <option value="RJ">RJ</option>
+                <option value="RN">RN</option>
+                <option value="RS">RS</option>
+                <option value="RO">RO</option>
+                <option value="RR">RR</option>
+                <option value="SC">SC</option>
+                <option value="SP">SP</option>
+                <option value="SE">SE</option>
+                <option value="TO">TO</option>
+              </select>
+            </div>
+
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-globe"></i></span>
+              <input type="text" id="editNacionalidade" placeholder="Nacionalidade">
+            </div>
+
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-book"></i></span>
+              <select id="editTurma" style="padding-left: 50px;">
+                <option value="">Carregando turmas...</option>
+              </select>
+            </div>
+            <div class="checkbox-moderno" style="margin-top: 16px;">
+              <input type="checkbox" id="editEdEspecial">
+              <label for="editEdEspecial" style="font-weight: 500;"><i class="fas fa-puzzle-piece"></i> Aluno público da Educação Especial</label>
+            </div>
+            <div style="margin-top: 12px;">
+              <button class="btn-salvar" id="btnSalvarInfoAluno" onclick="salvarDadosAluno()" style="width: 100%;">
+                <span class="btn-text"><i class="fas fa-save"></i> Salvar informações</span>
+                <span class="spinner-btn" style="display:none;"></span>
+              </button>
+            </div>
+          </div>  
+          <div id="detalhesConteudo"></div>
+          <div class="modal-actions" style="flex-wrap: wrap; gap: 10px;">
+            <!-- Seção Encerrar matrícula -->
+            <div style="width: 100%; border-top: 1px solid var(--card-border); padding-top: 16px; margin-top: 8px;">
+              <p style="margin: 0 0 8px; font-weight: 500;"><i class="fas fa-thumbtack"></i> Encerrar matrícula:</p>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                <!-- Botão Transferido (ícone + tooltip) -->
+                <button class="btn-icone" onclick="alterarSituacaoAluno('Transferido')" data-tooltip="Transferir aluno" style="color: #2563eb;">
+                  <i class="fas fa-exchange-alt"></i>
+                </button>
+                
+                <!-- Botão Concluído (ícone + tooltip) -->
+                <button class="btn-icone" onclick="alterarSituacaoAluno('Concluído')" data-tooltip="Concluir matrícula" style="color: #10b981;">
+                  <i class="fas fa-graduation-cap"></i>
+                </button>
+                
+                <!-- Botão Excluir Permanentemente (ícone + tooltip) - vermelho e menor -->
+                <button class="btn-icone" onclick="excluirAlunoPermanentemente()" data-tooltip="Excluir permanentemente" style="color: #dc2626; width: 32px; height: 32px;">
+                  <i class="fas fa-trash-alt"></i>
+                </button>
+              </div>
+            </div>
+            
+            <!-- Ações principais (Salvar alterações e Voltar) -->
+            <div style="display: flex; gap: 8px; width: 100%; justify-content: flex-end;">
+              <button class="btn-icone" id="btnSalvarDetalhes" onclick="salvarAlteracoesEmLote(dadosAlunoAtual._row)" data-tooltip="Salvar alterações" style="color: #10b981;">
+                <i class="fas fa-save"></i>
+              </button>
+              <button class="btn-icone" onclick="fecharModalDetalhes()" data-tooltip="Fechar" style="color: #64748b;">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>    
+    <!-- 🏫 MODAL DE LISTA DE TURMAS -->
+    <div id="modalTurmas" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande">
+        <div class="modal-header">
+          <h2><i class="fas fa-school"></i> Gerenciar Turmas</h2>
+          <button class="close-btn" onclick="fecharModalTurmas()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <!-- Filtro de Escola (visível apenas para supervisor) -->
+          <div id="filtroEscolaTurmaWrapper" style="display: flex; gap: 16px; margin-bottom: 20px;">
+            <select id="filtroEscolaTurma" class="input-icon" style="flex:2;">
+              <option value="">Todas as escolas</option>
+            </select>
+          </div>
+          <!-- Botão Nova Turma – sempre visível -->
+          <div style="margin-bottom: 20px;">
+            <button class="btn-primary" onclick="abrirModalCadastroTurma()"><i class="fas fa-plus"></i> Nova turma</button>
+          </div>
+          <div id="listaTurmasContainer"></div>
+          <div class="modal-actions">
+            <button class="btn-cancelar" onclick="fecharModalTurmas()">Fechar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ➕ MODAL DE CADASTRO DE TURMA -->
+    <div id="modalCadastroTurma" class="modal-overlay" style="display:none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2><i class="fas fa-plus"></i> Nova Turma</h2>
+          <button class="close-btn" onclick="fecharModalCadastroTurma()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-school"></i></span>
+            <select id="selectEscolaTurma">
+              <option value="">Selecione a escola</option>
+            </select>
+          </div>
+          <div class="input-icon" style="align-items: flex-start;">
+            <span class="icon" style="top: 16px;"><i class="fas fa-book"></i></span>
+            <textarea id="nomeTurma" rows="4" placeholder="Digite uma turma por linha&#10;Ex:&#10;1º Ano A&#10;1º Ano B&#10;2º Ano A" style="padding-left: 50px; padding-top: 14px; line-height: 1.5; resize: vertical;"></textarea>
+          </div>
+          <p style="font-size: 12px; color: #64748b; margin-top: -8px; margin-left: 50px;">Digite uma turma por linha.</p>
+          <div class="error-msg" id="erroTurma" style="display:none;"></div>
+          <div class="modal-actions">
+            <button class="btn-salvar" onclick="salvarTurma()">Salvar</button>
+            <button class="btn-cancelar" onclick="fecharModalCadastroTurma()">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL DE EXPORTAÇÃO DE RELATÓRIO (PDF) -->
+    <div id="modalExportacao" class="modal-overlay" style="display:none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2><i class="fas fa-file-pdf"></i> Exportar Relatório em PDF</h2>
+          <button class="close-btn" onclick="fecharModalExportacao()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <p style="margin-top:0; color: var(--text-muted);">
+            Selecione os filtros para o relatório. Deixe em branco para considerar todos.
+          </p>
+          
+          <!-- Filtro de Escola (visível apenas para supervisor) -->
+          <div class="input-icon" id="exportEscolaWrapper" style="display:none;">
+            <span class="icon"><i class="fas fa-school"></i></span>
+            <select id="exportEscola">
+              <option value="">Todas as escolas</option>
+            </select>
+          </div>
+          
+          <!-- Filtro de Turma -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-book"></i></span>
+            <select id="exportTurma">
+              <option value="">Todas as turmas</option>
+            </select>
+          </div>
+          
+          <!-- Filtro de Status -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-chart-bar"></i></span>
+            <select id="exportStatus">
+              <option value="">Todos os status</option>
+              <option value="✅ Completo">✅ Completo</option>
+              <option value="⚠️ Pendente / Vencido">⚠️ Pendente / Vencido</option>
+            </select>
+          </div>
+          
+          <div class="modal-actions">
+            <button class="btn-salvar" onclick="executarExportacaoPDF()">
+              <i class="fas fa-print"></i> Gerar PDF
+            </button>
+            <button class="btn-cancelar" onclick="fecharModalExportacao()">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 📂 MODAL DE DOCUMENTOS -->
+    <div id="modalDocumentos" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande">
+        <div class="modal-header">
+          <h2><i class="fas fa-folder-open"></i> Gerenciar Documentos</h2>
+          <button class="close-btn" onclick="fecharModalDocumentos()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <!-- Abas Upload / Listagem -->
+          <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button class="btn-pequeno" onclick="mostrarAbaUpload()"><i class="fas fa-upload"></i> Upload</button>
+            <button class="btn-pequeno" onclick="mostrarAbaListagem()"><i class="fas fa-list"></i> Listar/Baixar</button>
+          </div>
+          
+          <!-- Aba de Upload -->
+          <div id="abaUpload" style="display:block;">
+            <div class="input-icon" id="uploadEscolaWrapper">
+              <span class="icon"><i class="fas fa-school"></i></span>
+              <select id="uploadEscola">
+                <option value="">Selecione a escola</option>
+              </select>
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-file"></i></span>
+              <select id="uploadTipoDoc" onchange="atualizarCampoNomeTitular()">
+                <option value="">Tipo de documento</option>
+                <option value="Certificado">Certificado</option>
+                <option value="Histórico">Transferidos / Concluídos</option>
+                <option value="Diploma">Diploma</option>
+                <option value="Declaração de Transferência">Declaração de Transferência</option>
+                <option value="Declaração de Escolaridade">Declaração de Escolaridade</option>
+                <option value="Declaração de Conclusão">Declaração de Conclusão</option>
+                <option value="Ficha de Matrícula">Ficha de Matrícula</option>
+                <option value="Termo de Compromisso">Termo de Compromisso</option>
+                <option value="Termo de Uso de Imagem">Termo de Uso de Imagem</option>
+                <option value="Atestado Médico">Atestado Médico</option>
+                <option value="Atas de Conselho de Classe">Atas de Conselho de Classe</option>
+                <option value="Listas de Alunos Concluintes">Listas de Alunos Concluintes</option>
+                <option value="Plano de Curso (Técnico)">Plano de Curso (Técnico)</option>
+              </select>
+            </div>
+            <div class="input-icon" id="campoNomeTitular">
+              <span class="icon"><i class="fas fa-user"></i></span>
+              <input type="text" id="uploadNomeTitular" placeholder="Nome do titular do documento">
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-paperclip"></i></span>
+              <input type="file" id="arquivoUpload" accept=".pdf,.jpg,.jpeg,.png">
+            </div>
+            <div class="modal-actions">
+              <button class="btn-salvar" onclick="fazerUpload()"><i class="fas fa-paper-plane"></i> Enviar</button>
+              <button class="btn-cancelar" onclick="fecharModalDocumentos()">Cancelar</button>
+            </div>
+          </div>
+          
+          <!-- Aba de Listagem -->
+          <div id="abaListagem" style="display:none;">
+            <div class="filtros-container" style="padding:0; margin-bottom:16px;">
+              <div class="input-icon" id="filtroEscolaDocWrapper">
+                <span class="icon"><i class="fas fa-school"></i></span>
+                <select id="filtroEscolaDoc">
+                  <option value="">Todas as escolas</option>
+                </select>
+              </div>
+              <div class="input-icon">
+                <span class="icon"><i class="fas fa-file"></i></span>
+                <select id="filtroTipoDoc">
+                  <option value="">Todos os tipos</option>
+                  <option value="Certificado">Certificado</option>
+                  <option value="Transferidos / Concluídos">Histórico</option>
+                  <option value="Diploma">Diploma</option>
+                  <option value="Declaração de Transferência">Declaração de Transferência</option>
+                  <option value="Declaração de Escolaridade">Declaração de Escolaridade</option>
+                  <option value="Declaração de Conclusão">Declaração de Conclusão</option>
+                  <option value="Ficha de Matrícula">Ficha de Matrícula</option>
+                  <option value="Termo de Compromisso">Termo de Compromisso</option>
+                  <option value="Termo de Uso de Imagem">Termo de Uso de Imagem</option>
+                  <option value="Atestado Médico">Atestado Médico</option>
+                  <option value="Atas de Conselho de Classe">Atas de Conselho de Classe</option>
+                  <option value="Listas de Alunos Concluintes">Listas de Alunos Concluintes</option>
+                  <option value="Plano de Curso (Técnico)">Plano de Curso (Técnico)</option>
+                </select>
+              </div>
+              <div class="input-icon" style="flex:2;">
+                <span class="icon"><i class="fas fa-search"></i></span>
+                <input type="text" id="filtroNomeAlunoDoc" placeholder="Buscar por nome do aluno...">
+              </div>
+              <button class="btn-primary" onclick="buscarDocumentos()"><i class="fas fa-search"></i> Buscar</button>
+            </div>
+            <div id="listaDocumentosContainer" style="max-height:400px; overflow-y:auto;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL DE LEGALIZAÇÃO (ATOS AUTORIZATIVOS) -->
+<div id="modalLegalizacao" class="modal-overlay" style="display:none;">
+  <div class="modal-card modal-card--grande modal-card--fullscreen">
+    <div class="modal-header">
+      <h2><i class="fas fa-gavel"></i> Atos Autorizativos</h2>
+      <button class="close-btn" onclick="fecharModalLegalizacao()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <!-- Botões de ação e filtros (layout limpo) -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px;">
+  <div style="display: flex; gap: 6px;">
+    <button class="btn-pequeno" onclick="abrirFormAto()"><i class="fas fa-plus"></i> Novo</button>
+    <button class="btn-pequeno" id="btnExportarSelecionados" onclick="exportarAtosSelecionados()" style="display: none;"><i class="fas fa-file-pdf"></i> Exportar</button>
+  </div>
+  <div id="filtrosAtosContainer" style="display: flex; gap: 6px; flex-wrap: nowrap; align-items: center;">
+    <select id="filtroEscolaAto" onchange="carregarAtos()" style="font-size:13px; padding:6px 10px; border-radius:20px; min-width:140px;">
+      <option value="">Todas as escolas</option>
+    </select>
+    <select id="filtroTipoAto" onchange="carregarAtos()" style="font-size:13px; padding:6px 10px; border-radius:20px; min-width:160px;">
+      <option value="">Todos os tipos</option>
+      <option value="Ato de instituição (criação)">Ato de instituição (criação)</option>
+      <option value="Ato de instituição (credenciamento/renovação)">Ato de instituição (credenciamento/renovação)</option>
+      <option value="Ato de curso (criação)">Ato de curso (criação)</option>
+      <option value="Ato de curso (aprovação/renovação)">Ato de curso (aprovação/renovação)</option>
+    </select>
+    <select id="filtroStatusAto" onchange="carregarAtos()" style="font-size:13px; padding:6px 10px; border-radius:20px; min-width:120px;">
+      <option value="">Todos os status</option>
+      <option value="Válido">Válido</option>
+      <option value="Vencendo (até 90 dias)">Vencendo (até 90 dias)</option>
+      <option value="Vencido">Vencido</option>
+    </select>
+  </div>
+</div>
+      <!-- Lista de atos (com seleção) -->
+      <div id="listaAtosContainer" style="max-height: calc(100vh - 200px); overflow-y: auto; padding-right: 8px;">
+        <!-- Preenchido via JS -->
+      </div>
+    </div>
+  </div>
+</div>
+    
+    <!-- MODAL DE CADASTRO/EDIÇÃO DE ATO -->
+    <div id="modalFormAto" class="modal-overlay" style="display:none;">
+  <div class="modal-card" style="max-width: 600px;">
+    <div class="modal-header">
+      <h2 id="formAtoTitulo">Novo Ato Autorizativo</h2>
+      <button class="close-btn" onclick="fecharFormAto()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="atoId">
+      <div class="input-icon">
+        <span class="icon"><i class="fas fa-school"></i></span>
+        <select id="atoEscola" required>
+          <option value="">Selecione a escola</option>
+        </select>
+      </div>
+      
+      <div class="input-icon">
+        <span class="icon"><i class="fas fa-tag"></i></span>
+        <select id="atoTipo" required onchange="atualizarVisibilidadeCurso()">
+          <option value="">Tipo de Ato</option>
+          <option value="Ato de instituição (criação)">Ato de instituição (criação)</option>
+          <option value="Ato de instituição (credenciamento/renovação)">Ato de instituição (credenciamento/renovação)</option>
+          <option value="Ato de curso (criação)">Ato de curso (criação)</option>
+          <option value="Ato de curso (aprovação/renovação)">Ato de curso (aprovação/renovação)</option>
+        </select>
+      </div>
+      <div class="input-icon">
+        <span class="icon"><i class="fas fa-book"></i></span>
+        <select id="atoCursoEtapa" required onchange="atualizarFundamentacoes()">
+          <option value="">Curso/Etapa</option>
+        </select>
+      </div>
+      <div class="input-icon" id="fundamentacaoWrapper" style="display:none;">
+        <span class="icon"><i class="fas fa-gavel"></i></span>
+        <select id="atoFundamentacao">
+          <option value="">Selecione a fundamentação legal</option>
+        </select>
+      </div>
+      <div class="input-icon" id="cursoTecnicoWrapper" style="display:none;">
+        <span class="icon"><i class="fas fa-graduation-cap"></i></span>
+        <select id="atoCursoTecnico">
+          <option value="">Nome do curso técnico (opcional)</option>
+        </select>
+      </div>
+      <div class="input-icon">
+        <span class="icon"><i class="fas fa-hashtag"></i></span>
+        <input type="text" id="atoNumero" placeholder="Número do Ato (ex: CEE-ES nº 3.777/2014)" required>
+      </div>
+      <div class="input-icon">
+        <span class="icon"><i class="fas fa-calendar-alt"></i></span>
+        <input type="date" id="atoDataPublicacao" required>
+        <small style="display: block; margin-top: 2px; font-size: 11px; color: var(--text-muted);">
+          Data de publicação no Diário Oficial
+        </small>
+      </div>
+      <div class="input-icon">
+        <span class="icon"><i class="fas fa-stamp"></i></span>
+        <input type="date" id="atoDataHomologacao" required>
+        <small style="display: block; margin-top: 2px; font-size: 11px; color: var(--text-muted);">
+          Data de homologação pelo órgão competente (ex.: CEE)
+        </small>
+      </div>
+      <div class="input-icon">
+        <span class="icon"><i class="fas fa-hourglass-half"></i></span>
+        <select id="atoValidadeAnos" required>
+          <option value="5">5 anos (padrão para credenciamento)</option>
+          <option value="3">3 anos (cursos técnicos)</option>
+        </select>
+      </div>
+      <div class="input-icon">
+        <span class="icon"><i class="fas fa-paperclip"></i></span>
+        <input type="file" id="atoArquivo" accept=".pdf">
+      </div>
+      <div class="input-icon">
+        <span class="icon"><i class="fas fa-pencil-alt"></i></span>
+        <textarea id="atoObservacoes" rows="2" placeholder="Observações (opcional)"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-salvar" onclick="salvarAto()">Salvar</button>
+        <button class="btn-cancelar" onclick="fecharFormAto()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DADOS DA ESCOLA -->
+<div id="modalDadosEscola" class="modal-overlay" style="display:none;">
+  <div class="modal-card modal-card--grande modal-card--fullscreen">
+    <div class="modal-header">
+      <h2><i class="fas fa-school"></i> Dados da Escola</h2>
+      <button class="close-btn" onclick="fecharModalDadosEscola()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <!-- Seleção da Escola -->
+      <div class="input-icon">
+        <span class="icon"><i class="fas fa-school"></i></span>
+        <select id="selectEscolaDados" onchange="carregarDadosEscola()">
+          <option value="">Selecione a escola</option>
+        </select>
+      </div>
+
+      <!-- Card com os dados atuais -->
+      <div id="cardDadosEscola" style="display:none; margin-top: 16px;">
+        <div class="usuario-card">
+          <div class="usuario-avatar"><i class="fas fa-school"></i></div>
+          <div class="usuario-info">
+            <strong>Dados atuais</strong>
+            <p id="resumoEndereco" style="margin:4px 0;"></p>
+            <p id="resumoContato" style="margin:4px 0;"></p>
+            <p id="resumoAtos" style="margin:4px 0;"></p>
+            <button class="btn-pequeno" onclick="mostrarFormEdicaoDadosEscola()">
+              <i class="fas fa-edit"></i> Editar
+            </button>
+            <button class="btn-pequeno" onclick="exportarDadosEscolaPDF()">
+              <i class="fas fa-file-pdf"></i> Exportar PDF
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Formulário de edição (oculto por padrão) -->
+      <div id="formDadosEscola" style="display:none; margin-top: 16px;">
+        <div class="input-icon">
+          <span class="icon"><i class="fas fa-road"></i></span>
+          <input type="text" id="editLogradouro" placeholder="Logradouro (Rua, Av., etc.)">
+        </div>
+        <div class="input-icon">
+          <span class="icon"><i class="fas fa-hashtag"></i></span>
+          <input type="text" id="editNumero" placeholder="Número">
+        </div>
+        <div class="input-icon">
+          <span class="icon"><i class="fas fa-map"></i></span>
+          <input type="text" id="editBairro" placeholder="Bairro">
+        </div>
+        <div class="input-icon">
+          <span class="icon"><i class="fas fa-city"></i></span>
+          <input type="text" id="editCidade" placeholder="Cidade">
+        </div>
+        <div class="input-icon">
+          <span class="icon"><i class="fas fa-flag"></i></span>
+          <select id="editUfEscola">
+            <option value="">UF</option>
+            <option value="AC">AC</option><option value="AL">AL</option><option value="AP">AP</option>
+            <option value="AM">AM</option><option value="BA">BA</option><option value="CE">CE</option>
+            <option value="DF">DF</option><option value="ES">ES</option><option value="GO">GO</option>
+            <option value="MA">MA</option><option value="MT">MT</option><option value="MS">MS</option>
+            <option value="MG">MG</option><option value="PA">PA</option><option value="PB">PB</option>
+            <option value="PR">PR</option><option value="PE">PE</option><option value="PI">PI</option>
+            <option value="RJ">RJ</option><option value="RN">RN</option><option value="RS">RS</option>
+            <option value="RO">RO</option><option value="RR">RR</option><option value="SC">SC</option>
+            <option value="SP">SP</option><option value="SE">SE</option><option value="TO">TO</option>
+          </select>
+        </div>
+        <div class="input-icon">
+          <span class="icon"><i class="fas fa-mailbox"></i></span>
+          <input type="text" id="editCep" placeholder="CEP">
+        </div>
+        <div class="input-icon">
+          <span class="icon"><i class="fas fa-envelope"></i></span>
+          <input type="email" id="editEmailEscola" placeholder="E-mail institucional">
+        </div>
+        <div class="input-icon">
+          <span class="icon"><i class="fas fa-phone"></i></span>
+          <input type="tel" id="editTelefone" placeholder="Telefone" oninput="aplicarMascaraTelefone(event)">
+        </div>
+        <div class="input-icon">
+          <span class="icon"><i class="fas fa-file-contract"></i></span>
+          <input type="text" id="editAtoCriacao" placeholder="Ato de Criação">
+        </div>
+        <div class="input-icon">
+          <span class="icon"><i class="fas fa-calendar-alt"></i></span>
+          <input type="date" id="editPublicacaoCriacao" placeholder="Data de publicação">
+          <small style="display: block; margin-top: 2px; font-size: 11px; color: var(--text-muted);">
+            Data de publicação
+          </small>
+        </div>
+        <div class="input-icon">
+          <span class="icon"><i class="fas fa-file-contract"></i></span>
+          <input type="text" id="editAtoAprovacao" placeholder="Ato de Aprovação/Credenciamento">
+        </div>
+        <div class="input-icon">
+          <span class="icon"><i class="fas fa-calendar-alt"></i></span>
+          <input type="date" id="editPublicacaoAprovacao" placeholder="Data de publicação">
+          <small style="display: block; margin-top: 2px; font-size: 11px; color: var(--text-muted);">
+            Data de publicação
+          </small>
+        </div>
+        <!-- Seção de Organizações Curriculares -->
+        <div style="margin-top: 20px; border-top: 1px solid var(--card-border); padding-top: 16px;">
+          <h3><i class="fas fa-book"></i> Organizações Curriculares</h3>
+          <p style="font-size:13px; color: var(--text-muted);">Vincule as OCEBs/OCTs desta escola.</p>
+
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <select id="selectEtapaModalidade" onchange="atualizarSelectOCs()" style="flex: 1;">
+              <option value="">Selecione a Etapa/Modalidade</option>
+            </select>
+            <select id="selectOrganizacao" style="flex: 2;" disabled>
+              <option value="">Primeiro selecione a etapa</option>
+            </select>
+            <button class="btn-pequeno" onclick="adicionarOrganizacao()"><i class="fas fa-plus"></i></button>
+          </div>
+
+          <!-- Lista de OCs adicionadas -->
+          <div id="listaOrgsAdicionadas" style="display: flex; flex-direction: column; gap: 6px;"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-salvar" onclick="salvarDadosEscola()">Salvar</button>
+          <button class="btn-cancelar" onclick="cancelarEdicaoDadosEscola()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    <!-- HEADER PRINCIPAL -->
+    <header>
+      <!-- Faixa de campanha mensal -->
+      <div id="faixaCampanha" style="display:none; position: absolute; top: 12px; left: 16px; z-index: 10; 
+          background: rgba(0,0,0,0.25); backdrop-filter: blur(4px); border-radius: 12px; 
+          padding: 8px 16px; color: #fff; font-size: 14px; font-weight: 500; 
+          max-width: 300px; line-height: 1.3; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+        <span id="textoCampanha"></span>
+        <a id="linkCampanha" href="#" target="_blank" style="color: #fff; text-decoration: underline; margin-left: 8px; white-space: nowrap;">Saiba mais</a>
+      </div>
+      <div class="icone-flutuante" id="iconeGlobo" aria-hidden="true"></div>
+      <div class="icone-flutuante" id="iconeAmpulheta" aria-hidden="true"></div>
+      <div id="headerTitulo" style="text-align: center; padding: 10px 20px; z-index: 1; position: relative; width: 100%;">
+      <div id="estrelasContainer" style="text-align: center; font-size: 2rem; letter-spacing: 6px; color: #C0C0C0; line-height: 1.2; min-height: 2.8rem; margin-bottom: 2px; text-shadow: 0 0 12px rgba(192, 192, 192, 0.3);"></div> 
+  <div id="nomeEscolaHeader" style="font-size: clamp(24px, 5vw, 38px); font-weight: 800; color: #ffffff; text-shadow: 0 4px 12px rgba(0,0,0,0.4); letter-spacing: -0.5px; line-height: 1.1;">
+    Carregando...
+  </div>
+  <div style="font-size: clamp(14px, 2.5vw, 18px); font-weight: 500; color: #e0e7ff; text-shadow: 0 2px 6px rgba(0,0,0,0.3); margin-top: 4px; letter-spacing: 1px; text-transform: uppercase;">
+    Secretaria Escolar
+  </div>
+</div>
+      <!-- Badges de perfil e e‑mail (canto superior direito) -->
+      <div class="header-right">
+        <!-- Foto de perfil + e‑mail -->
+        <div id="fotoPerfilContainer" style="display: flex; flex-direction: column; align-items: center; cursor: pointer;" title="Clique para alterar a foto">
+          <div style="position: relative;">
+            <img id="fotoPerfilImg" src="" style="display: none; width: 60px; height: 60px; border-radius: 50%; object-fit: cover; border: 2px solid #fff;" alt="Foto de perfil">
+            <div id="fotoPerfilIniciais" style="display: flex; width: 60px; height: 60px; border-radius: 50%; background: #94a3b8; color: white; font-weight: bold; justify-content: center; align-items: center; font-size: 28px; border: 2px solid #fff;">
+              <i class="fas fa-camera"></i>
+            </div>
+          </div>
+          <span id="nomeUsuarioTexto" style="font-size: 14px; margin-top: 4px; white-space: nowrap; color: #ffffff; font-weight: 500;"></span>
+<span id="emailUsuarioTexto" style="font-size: 11px; margin-top: 2px; white-space: nowrap; color: #e0e7ff;"></span>
+          <span id="perfilUsuarioTexto" style="font-size: 11px; margin-top: 2px; white-space: nowrap; color: #facc15; font-weight: 500;"></span>
+          
+          <!-- 🔽 MOVER O INDICADOR PARA CÁ, DENTRO DO CONTAINER -->
+            <div id="indicadorUltimaAtualizacao" style="font-size: 10px; color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); margin-top: 6px; text-align: center; visibility: hidden !important;">
+            <i class="fas fa-sync-alt"></i> <span id="textoUltimaAtualizacao">---</span>
+          </div>
+        </div>
+
+        </div>
+      <input type="file" id="inputUploadFoto" accept="image/*" style="display: none;" onchange="fazerUploadFoto(this.files[0])">
+
+      <!-- Barra de ferramentas (menu centralizado, ações à direita) -->
+      <div style="width: 100%; display: flex; align-items: center; margin-top: 10px; position: relative;">
+        <!-- Espaçador à esquerda (mesma largura dos botões de ação) -->
+        <div style="flex: 1;"></div>
+
+                <!-- Menu centralizado -->
+        <div style="flex: 0; text-align: center;">
+          <div class="dropdown">
+            <button class="btn-icone btn-menu-brilho" onclick="toggleMenu()" data-tooltip="Menu" style="background: transparent !important; border: none !important; color: #facc15;"><i class="fa-solid fa-circle-chevron-down"></i></button>
+            <div id="menuDropdown" class="dropdown-content dropdown-horizontal" style="display: none;">
+
+              <div id="menuAlunosWrapper" style="display:flex; flex-direction:row; flex-wrap:wrap;">
+
+                <!-- Coluna: Alunos -->
+                <div class="menu-coluna" id="menuColunaAlunos">
+                  <div class="menu-secao-titulo">Alunos</div>
+                  <button onclick="abrirNovoAluno()" class="btn-header"><i class="fas fa-user-plus"></i> Novo Aluno</button>
+                  <button onclick="abrirModalImportacao()" class="btn-header"><i class="fas fa-upload"></i> Importar Alunos</button>
+                  <button onclick="abrirModalAtualizarMatriculados()" class="btn-header"><i class="fas fa-sync-alt"></i> Atualizar Matriculados</button>
+                  <button onclick="abrirModalPromocao()" class="btn-header"><i class="fas fa-arrow-up"></i> Promover Alunos</button>
+                  <button onclick="abrirModalChecklistLote()" class="btn-header"><i class="fas fa-tasks"></i> Checklist em Lote</button>
+                  <button onclick="abrirModalExportacao()" class="btn-header"><i class="fas fa-file-pdf"></i> Exportar Relatório</button>
+                  <button onclick="abrirModalInativos()" id="btnInativos" class="btn-header"><i class="fas fa-archive"></i> Transferidos / Concluídos</button>
+                </div>
+
+                <!-- Coluna: Documentos e Processos -->
+                <div class="menu-coluna" id="menuColunaDocs">
+                  <div class="menu-secao-titulo">Documentos e Processos</div>
+                  <button onclick="abrirModalDocumentos()" id="btnDocumentos" class="btn-header"><i class="fas fa-folder-open"></i> Documentos</button>
+                  <button onclick="abrirModalModelos()" id="btnModelos" class="btn-header"><i class="fas fa-file-alt"></i> Modelos</button>
+                  <button onclick="abrirModalProcessos()" id="btnProcessos" class="btn-header"><i class="fas fa-folder-open"></i> Edocs</button>
+                </div>
+
+                <!-- Coluna: Gestão Escolar -->
+                <div class="menu-coluna" id="menuColunaGestao">
+                  <div class="menu-secao-titulo">Gestão Escolar</div>
+                  <button onclick="abrirModalTurmas()" id="btnTurmas" class="btn-header"><i class="fas fa-school"></i> Turmas</button>
+                  <button onclick="abrirModalLegislacao()" id="btnLegislacao" class="btn-header"><i class="fas fa-balance-scale"></i> Legislação</button>
+                  <button onclick="abrirModalLegalizacao()" id="btnLegalizacao" class="btn-header" style="display:none;"><i class="fas fa-gavel"></i> Atos Autorizativos</button>
+                  <button onclick="abrirModalGeradorDocumentos()" id="btnGeradorDocumentos" class="btn-header" style="display:none;"><i class="fas fa-file-contract"></i> Parecer Supervisão</button>
+                  <button onclick="abrirModalMonitoramento()" id="btnMonitoramento" class="btn-header"><i class="fas fa-clipboard-list"></i> Monitoramento</button>
+                  <button onclick="abrirModalDadosEscola()" id="btnDadosEscola" class="btn-header"><i class="fas fa-school"></i> Dados da Escola</button>
+                </div>
+
+                <!-- Coluna: Plano Tático -->
+                <div class="menu-coluna" id="menuColunaPlanoTatico">
+                  <div class="menu-secao-titulo">Plano Tático</div>
+                  <button onclick="abrirModalPlanoTaticoMensal()" id="btnPlanoTatico" class="btn-header" style="display:none;"><i class="fas fa-chart-line"></i> Mensal</button>
+                  <button onclick="abrirModalPlanoTaticoTrimestral()" id="btnPlanoTaticoTrim" class="btn-header" style="display:none;"><i class="fas fa-chart-bar"></i> Trimestral</button>
+                  <button onclick="abrirModalAcompanhamentoPT()" id="btnAcompanhamentoPT" class="btn-header" style="display:none;"><i class="fas fa-clipboard-list"></i> Acompanhar</button>
+                </div>
+
+                <!-- Coluna: Administração -->
+                <div class="menu-coluna" id="menuColunaAdmin">
+                  <div class="menu-secao-titulo">Administração</div>
+                  <button onclick="abrirModalListaUsuarios()" id="btnVerUsuarios" class="btn-header"><i class="fas fa-users"></i> Usuários</button>
+                  <button onclick="abrirModalCadastroUsuario()" id="btnCadastrarUsuario" class="btn-header"><i class="fas fa-user-plus"></i> Cadastrar</button>
+                  <button onclick="abrirModalAlterarSenha()" class="btn-header" id="btnAlterarSenha"><i class="fas fa-key"></i> Alterar Senha</button>
+                  <button onclick="iniciarTour()" class="btn-header" id="btnAjudaTour"><i class="fas fa-circle-question"></i> Como usar o sistema</button>
+                  <button onclick="abrirModalAprovacaoTermos()" id="btnAprovacaoTermos" class="btn-header" style="display:none;"><i class="fas fa-file-signature"></i> Aprovar Termos<span id="badgeTermosPendentes" style="display:none; background:#dc2626; color:white; border-radius:50%; padding:2px 6px; font-size:11px; margin-left:6px;">0</span></button>
+                </div>
+
+                <!-- Coluna: Profissionais (oculta por padrão) -->
+                <div class="menu-coluna" id="menuColunaProfissionais" style="display:none;">
+                  <div class="menu-secao-titulo">Profissionais</div>
+                  <button onclick="abrirModalImportacaoProfissionais()" class="btn-header">
+                    <i class="fas fa-upload"></i> Importar Profissionais
+                  </button>
+                </div>
+
+              </div> <!-- FIM menuAlunosWrapper -->
+
+              <!-- Coluna extra para mobile: ações do header -->
+              <div class="menu-coluna hide-desktop" id="menuColunaAcoes">
+                <div class="menu-secao-titulo">Ações</div>
+                <button onclick="abrirNotificacoes()" class="btn-header"><i class="fas fa-bell"></i> Notificações</button>
+                <button onclick="abrirModalAgenda()" class="btn-header"><i class="fas fa-calendar-alt"></i> Agenda</button>
+                <button onclick="abrirModalDashboard()" class="btn-header"><i class="fas fa-chart-pie"></i> Dashboard</button>
+                <button onclick="abrirModalHistorico()" class="btn-header"><i class="fas fa-history"></i> Histórico</button>
+                <button onclick="window.open('manual.html','_blank')" class="btn-header"><i class="fas fa-book"></i> Manual</button>
+                <button onclick="logout()" class="btn-header"><i class="fas fa-sign-out-alt"></i> Sair</button>
+              </div>
+
+            </div> <!-- FIM menuDropdown -->
+          </div>
+        </div>
+
+        <!-- Botões de ação à direita -->
+                <div id="headerActionsRight" style="flex: 1; display: flex; align-items: center; gap: 10px; justify-content: flex-end;">
+            <!-- 🔍 CAMPO DE BUSCA GLOBAL -->
+          <div style="position: relative;">
+          <input type="text" id="inputBuscaGlobal" placeholder="Buscar no sistema..."
+                style="padding: 8px 12px; border-radius: 20px; border: 1px solid var(--input-border);
+                        background: var(--input-bg); color: var(--text-primary); width: 220px;"
+                onkeydown="if(event.key==='Enter'){buscarGlobalmente(); event.preventDefault();}">
+            <div id="dropdownBuscaGlobal" style="position: absolute; top: 100%; left: 0; right: 0; background: var(--card-bg);
+                  border: 1px solid var(--card-border); border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+                  z-index: 10000; max-height: 60vh; overflow-y: auto; display: none;"></div>
+          </div>
+          <!-- Notificações -->
+          <div style="position: relative; display: inline-block;">
+            <button id="btnNotificacoes" class="btn-icone" onclick="abrirNotificacoes()" data-tooltip="Notificações" style="background: transparent !important; border: none !important; color: #f97316;">
+
+              <i class="fas fa-bell"></i>
+            </button>
+            <span id="badgeNotificacoes" style="
+              display: none;
+              position: absolute;
+              top: -5px;
+              right: -5px;
+              background: #dc2626;
+              color: white;
+              border-radius: 50%;
+              width: 18px;
+              height: 18px;
+              font-size: 11px;
+              text-align: center;
+              line-height: 18px;
+            ">0</span>
+          </div>
+
+          <button id="btnAgenda" class="btn-icone" onclick="abrirModalAgenda()" data-tooltip="Agenda" style="background: transparent; border: none; color: #60a5fa;">
+            <i class="fas fa-calendar-alt"></i>
+          </button>
+
+          <button id="btnDashboard" class="btn-icone" onclick="abrirDashboard()" data-tooltip="Dashboard" style="background: transparent; border: none; color: #10b981;">
+            <i class="fas fa-chart-pie"></i>
+          </button>
+
+          <button id="btnHistorico" class="btn-icone" onclick="abrirModalHistorico()" data-tooltip="Histórico de ações" style="background: transparent; border: none; color: #eab308;">
+            <i class="fas fa-history"></i>
+          </button>
+
+          <button id="btnManual" class="btn-icone" onclick="window.open('manual.html','_blank')" data-tooltip="Manual do Sistema" style="background: transparent; border: none; color: #fbbf24;">
+            <i class="fas fa-book"></i>
+          </button>
+
+          <button id="btnSair" onclick="logout()" class="btn-outline" data-tooltip="Sair" style="background: transparent; color: #ffffff; border: none;">
+              <i class="fas fa-sign-out-alt"></i>
+          </button>
+
+
+        </div>
+      </div>
+      <div id="rankingContainer" style="position: absolute; bottom: 12px; left: 16px; z-index: 10; pointer-events: auto;"></div>
+    </header>
+
+    <!-- 📢 MURAL DE COMUNICADOS -->
+    <div id="muralComunicados" style="padding: 12px 20px; background: var(--card-bg); border-bottom: 1px solid var(--card-border);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <h3 style="margin:0; font-size:16px;"><i class="fas fa-bullhorn"></i> Mural de Comunicados</h3>
+        <div>
+          <!-- 🔥 BOTÃO NOVO AQUI -->
+          <button class="btn-pequeno" id="btnNovoComunicado" onclick="abrirModalComunicado()" style="display:none;">
+            <i class="fas fa-plus"></i> Novo
+          </button>
+          <button class="btn-pequeno" id="btnToggleMural" onclick="toggleMural()" style="margin-left:4px;">
+            <i class="fas fa-chevron-up"></i> Recolher
+          </button>
+        </div>
+      </div>
+      <div id="muralCards" style="display:flex; gap:12px; overflow-x:auto; padding-bottom:8px;"></div>
+    </div>
+
+    <!-- 👥 MODAL DE LISTA DE USUÁRIOS -->
+    <div id="modalListaUsuarios" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande">
+        <div class="modal-header">
+          <h2><i class="fas fa-users"></i> Usuários cadastrados</h2>
+          <button class="close-btn" onclick="fecharModalListaUsuarios()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
+            <button class="btn-primary" onclick="abrirModalCadastroUsuario()" style="padding: 10px 20px;"><i class="fas fa-user-plus"></i> Novo usuário</button>
+          </div>
+          <div id="listaUsuariosContainer"></div>
+          <div class="modal-actions" style="margin-top: 20px;">
+            <button class="btn-cancelar" onclick="fecharModalListaUsuarios()">Fechar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ➕ MODAL DE CADASTRO DE USUÁRIO -->
+    <div id="modalCadastroUsuario" class="modal-overlay" style="display:none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2><i class="fas fa-user-plus"></i> Cadastrar usuário</h2>
+          <button class="close-btn" onclick="fecharModalCadastroUsuario()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="input-icon">
+          <span class="icon"><i class="fas fa-user"></i></span>
+          <input type="text" id="novoNome" placeholder="Nome completo do usuário">
+        </div>
+        <div class="modal-body">
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-envelope"></i></span>
+            <input type="email" id="novoEmail" placeholder="E-mail institucional">
+          </div>
+    
+          <div class="checkbox-perfis" id="perfisCadastro">
+            <label><input type="checkbox" name="perfilCadastro" value="SECRETARIA" onchange="ajustarOpcoesCadastroUsuario()"> Secretaria</label>
+            <label><input type="checkbox" name="perfilCadastro" value="PEDAGOGICO" onchange="ajustarOpcoesCadastroUsuario()"> Pedagógico</label>
+            <label><input type="checkbox" name="perfilCadastro" value="SUPERVISOR" onchange="ajustarOpcoesCadastroUsuario()"> Supervisor</label>
+          </div>
+    
+          <div class="input-icon" id="campoEscolaContainer">
+            <span class="icon"><i class="fas fa-school"></i></span>
+            <select id="escola" style="padding-left: 50px;">
+              <option value="">Selecione a escola</option>
+            </select>
+          </div>
+    
+          <div class="error-msg" id="erroUsuario" style="display:none;"></div>
+    
+          <div class="modal-actions">
+            <button class="btn-salvar" id="btnSalvarUsuario" onclick="salvarUsuario()">
+              <span class="btn-text">Salvar</span>
+              <span class="spinner-btn" style="display:none;"></span>
+            </button>
+            <button class="btn-cancelar" onclick="fecharModalCadastroUsuario()">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ✏️ MODAL DE EDIÇÃO DE USUÁRIO -->
+    <div id="modalEdicaoUsuario" class="modal-overlay" style="display:none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2><i class="fas fa-user-edit"></i> Editar usuário</h2>
+          <button class="close-btn" onclick="fecharModalEdicaoUsuario()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="input-icon">
+          <span class="icon"><i class="fas fa-user"></i></span>
+          <input type="text" id="edicaoNome" placeholder="Nome completo do usuário">
+        </div>
+        <div class="modal-body">
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-envelope"></i></span>
+            <input type="email" id="edicaoEmail" placeholder="E-mail institucional" disabled style="opacity:.7;">
+          </div>
+
+          <div class="checkbox-perfis" id="perfisEdicao">
+            <label><input type="checkbox" name="perfilEdicao" value="SECRETARIA" onchange="ajustarOpcoesEdicaoUsuario()"> Secretaria</label>
+            <label><input type="checkbox" name="perfilEdicao" value="PEDAGOGICO" onchange="ajustarOpcoesEdicaoUsuario()"> Pedagógico</label>
+            <label><input type="checkbox" name="perfilEdicao" value="SUPERVISOR" onchange="ajustarOpcoesEdicaoUsuario()"> Supervisor</label>
+          </div>
+
+          <div class="input-icon" id="campoEscolaEdicaoContainer">
+            <span class="icon"><i class="fas fa-school"></i></span>
+            <select id="escolaEdicao" style="padding-left: 50px;">
+              <option value="">Selecione a escola</option>
+            </select>
+          </div>
+
+          <div class="error-msg" id="erroEdicaoUsuario" style="display:none;"></div>
+
+          <div class="modal-actions">
+            <button class="btn-salvar" id="btnSalvarEdicaoUsuario" onclick="salvarEdicaoUsuario()">
+              <span class="btn-text">Salvar alterações</span>
+              <span class="spinner-btn" style="display:none;"></span>
+            </button>
+            <button class="btn-cancelar" onclick="fecharModalEdicaoUsuario()">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 📁 MODAL DE PROCESSOS (Edocs) -->
+    <div id="modalProcessos" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande">
+        <div class="modal-header">
+          <h2><i class="fas fa-folder"></i> Gerenciar Processos / Documentos (Edocs)</h2>
+          <button class="close-btn" onclick="fecharModalProcessos()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <!-- Abas -->
+          <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button class="btn-pequeno" onclick="mostrarAbaCadastroProcesso()"><i class="fas fa-plus"></i> Cadastrar</button>
+            <button class="btn-pequeno" onclick="mostrarAbaBuscaProcesso()"><i class="fas fa-search"></i> Buscar</button>
+          </div>
+          
+          <!-- Aba de Cadastro -->
+          <div id="abaCadastroProcesso" style="display:block;">
+            <div class="input-icon" id="cadastroProcessoEscolaWrapper">
+              <span class="icon"><i class="fas fa-school"></i></span>
+              <select id="cadastroProcessoEscola">
+                <option value="">Selecione a escola</option>
+              </select>
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-tag"></i></span>
+              <select id="cadastroProcessoTipo" onchange="atualizarCamposProcesso()">
+                <option value="">Tipo de processo / Documento</option>
+              </select>
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-id-card"></i></span>
+              <input type="text" id="cadastroProcessoCodigo" placeholder="Código do processo (ex: 2026-00XX0X)">
+            </div>
+            <!-- Campos dinâmicos (aluno, categoria, subcategoria) serão inseridos aqui via JS -->
+            <div id="camposExtrasProcesso"></div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-pencil-alt"></i></span>
+              <textarea id="cadastroProcessoObs" rows="2" placeholder="Observações (opcional)"></textarea>
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-link"></i></span>
+              <input type="url" id="cadastroProcessoLink" placeholder="Link do processo no Edocs (opcional)">
+            </div>
+            <div class="modal-actions">
+              <button class="btn-salvar" onclick="cadastrarProcesso()">Salvar</button>
+              <button class="btn-cancelar" onclick="fecharModalProcessos()">Cancelar</button>
+            </div>
+          </div>
+          
+          <!-- Aba de Busca -->
+          <div id="abaBuscaProcesso" style="display:none;">
+            <div class="filtros-container" style="padding:0; margin-bottom:16px;">
+              <div class="input-icon">
+                <span class="icon"><i class="fas fa-tag"></i></span>
+                <select id="filtroProcessoTipo">
+                  <option value="">Todos os tipos</option>
+                </select>
+              </div>
+              <div class="input-icon" id="filtroProcessoEscolaWrapper">
+                <span class="icon"><i class="fas fa-school"></i></span>
+                <select id="filtroProcessoEscola">
+                  <option value="">Todas as escolas</option>
+                </select>
+              </div>
+              <div class="input-icon">
+                <span class="icon"><i class="fas fa-user"></i></span>
+                <input type="text" id="filtroProcessoAluno" placeholder="Nome do aluno">
+              </div>
+              <button class="btn-primary" onclick="buscarProcessos()"><i class="fas fa-search"></i> Buscar</button>
+              <button class="btn-pequeno" onclick="exportarRelatorioProcessos()"><i class="fas fa-file-export"></i> Exportar</button>
+            </div>
+            <div id="listaProcessosContainer" style="max-height:400px; overflow-y:auto;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- FILTROS -->
+    <div class="filtros-container" id="filtros-container">
+      <!-- Filtro de Escola (visível apenas para supervisor) -->
+      <div class="input-icon" id="filtroEscolaWrapper" style="min-width: 200px;">
+        <span class="icon"><i class="fas fa-school"></i></span>
+        <select id="filtroEscola" onchange="carregarTurmasParaFiltro(); aplicarFiltros();">
+          <option value="">Todas as escolas</option>
+        </select>
+      </div>
+    
+      <!-- Filtro de Turma -->
+      <div class="input-icon" id="filtroTurmaWrapper" style="min-width: 180px;">
+        <span class="icon"><i class="fas fa-book"></i></span>
+        <select id="filtroTurma" onchange="aplicarFiltros()">
+          <option value="">Todas as turmas</option>
+        </select>
+      </div>
+    
+      <!-- Filtro de Status -->
+      <div class="input-icon" id="filtroStatusWrapper" style="min-width: 160px;">
+        <span class="icon"><i class="fas fa-chart-bar"></i></span>
+        <select id="filtroStatus" onchange="aplicarFiltros()">
+          <option value="">Todos os status</option>
+          <option value="✅ Completo">✅ Completo</option>
+          <option value="⚠️ Pendente / Vencido">⚠️ Pendente / Vencido</option>
+          <option value="🔴 Vencido">🔴 Vencido</option>
+        </select>
+      </div>
+      <div class="input-icon" id="filtroSituacaoWrapper">
+        <span class="icon"><i class="fas fa-thumbtack"></i></span>
+        <select id="filtroSituacao" onchange="aplicarFiltros()">
+          <option value="">Todas as situações</option>
+          <option value="Ativo">Ativo</option>
+          <option value="Transferido">Transferido</option>
+          <option value="Concluído">Concluído</option>
+        </select>
+      </div>
+      <!-- Pesquisa por nome -->
+      <div class="input-icon" style="flex:2; min-width: 200px;">
+        <span class="icon"><i class="fas fa-search"></i></span>
+        <input type="text" id="pesquisaNome" placeholder="Buscar por nome, CPF, telefone...">
+      </div>
+    </div>
+    <!-- FILTROS DE PROFISSIONAIS (oculto por padrão) -->
+    <div class="filtros-container" id="filtros-profissionais-container" style="display:none;">
+      <div class="input-icon" id="filtroProfEscolaWrapper" style="min-width:200px;">
+        <span class="icon"><i class="fas fa-school"></i></span>
+        <select id="filtroProfEscola" onchange="carregarProfissionais()">
+          <option value="">Todas as escolas</option>
+        </select>
+      </div>
+      <div class="input-icon" style="min-width:180px;">
+        <span class="icon"><i class="fas fa-user-tie"></i></span>
+        <select id="filtroProfCargo" onchange="carregarProfissionais()">
+          <option value="">Todos os cargos</option>
+        </select>
+      </div>
+      <div class="input-icon" style="min-width:160px;">
+        <span class="icon"><i class="fas fa-calendar-check"></i></span>
+        <select id="filtroProfRegime" onchange="carregarProfissionais()">
+          <option value="">Todos os regimes</option>
+        </select>
+      </div>
+      <div class="input-icon" style="min-width:140px;">
+        <span class="icon"><i class="fas fa-circle"></i></span>
+        <select id="filtroProfSituacao" onchange="carregarProfissionais()">
+          <option value="">Todas as situações</option>
+        </select>
+      </div>
+      <div class="input-icon" style="flex:2; min-width:200px;">
+        <span class="icon"><i class="fas fa-search"></i></span>
+        <input type="text" id="pesquisaProfNome" placeholder="Buscar por nome...">
+      </div>
+    </div>
+    <!-- PAINEL DE MÉTRICAS -->
+    <div id="painel" class="painel-metricas">
+      <!-- Será preenchido via JS -->
+    </div>
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 20px; margin-bottom: 8px;">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <!-- Seletor de Abas -->
+      <div class="abas-seletor">
+        <button id="abaAlunos" class="aba-item ativo" onclick="selecionarAba('alunos')">
+          <i class="fas fa-user-graduate"></i> Alunos
+        </button>
+        <button id="abaProfissionais" class="aba-item" onclick="selecionarAba('profissionais')">
+          <i class="fas fa-user-tie"></i> Profissionais
+        </button>
+      </div>
+      <button id="btnModoFoco" class="btn-icone" onclick="alternarModoFoco()" data-tooltip="Modo Foco (tela cheia para a lista)" style="color: var(--text-muted); opacity: 0.5; transition: opacity 0.2s;">
+        <i class="fas fa-expand"></i>
+      </button>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;" id="areaToggleVisualizacao">
+      <span style="font-size: 14px; color: var(--text-muted);">Cards</span>
+      <button id="toggleVisualizacao" class="toggle-switch" onclick="alternarVisualizacao()">
+        <i class="fas fa-th-large"></i>
+      </button>
+      <span style="font-size: 14px; color: var(--text-muted);">Lista</span>
+    </div>
+  </div>
+    
+    <!-- LISTA DE ALUNOS -->
+    <div id="lista"></div>
+
+    <div id="paginacao" class="paginacao-container" style="display: flex; justify-content: center; gap: 12px; margin: 20px 0; align-items: center; flex-wrap: wrap;">
+      <!-- Botões serão inseridos dinamicamente, mas já deixamos espaço para o seletor -->
+    </div>
+    
+    <!-- 📤 MODAL DE IMPORTAÇÃO CSV -->
+    <div id="modalImportacao" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande">
+        <div class="modal-header">
+          <h2><i class="fas fa-upload"></i> Importar Alunos (CSV)</h2>
+          <button class="close-btn" onclick="fecharModalImportacao()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <div style="margin-bottom: 16px;">
+            <input type="file" id="arquivoCSV" accept=".csv,text/csv" style="padding: 8px;">
+            <button class="btn-primary" onclick="processarCSV()" style="margin-left: 8px;"><i class="fas fa-list"></i> Carregar Pré-visualização</button>
+          </div>
+          <div id="previewContainer" style="max-height: 300px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+            <p style="padding: 16px; color: #64748b;">Selecione um arquivo CSV para visualizar os dados.</p>
+          </div>
+          <div style="margin-top: 16px; display: flex; gap: 10px;">
+            <button class="btn-salvar" onclick="executarImportacao()" id="btnExecutarImportacao" disabled><i class="fas fa-download"></i> Iniciar Importação</button>
+            <button class="btn-cancelar" onclick="fecharModalImportacao()">Cancelar</button>
+          </div>
+          <div id="statusImportacao" style="margin-top: 12px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL IMPORTAÇÃO DE PROFISSIONAIS -->
+    <div id="modalImportacaoProfissionais" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande">
+        <div class="modal-header">
+          <h2><i class="fas fa-upload"></i> Importar Profissionais (CSV)</h2>
+          <button class="close-btn" onclick="fecharModalImportacaoProfissionais()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <p style="margin-top:0;">Selecione o arquivo CSV com os dados dos profissionais da sua escola.</p>
+          <div style="margin-bottom: 16px;">
+            <input type="file" id="arquivoCSVProfissionais" accept=".csv,text/csv">
+            <button class="btn-primary" onclick="processarCSVProfissionais()" style="margin-left:8px;">
+              <i class="fas fa-list"></i> Carregar Pré-visualização
+            </button>
+          </div>
+          <div id="previewProfissionaisContainer" style="max-height:300px; overflow:auto; border:1px solid var(--card-border); border-radius:8px;">
+            <p style="padding:16px; color:var(--text-muted);">Selecione um arquivo CSV para visualizar os dados.</p>
+          </div>
+          <div class="modal-actions" style="margin-top:16px;">
+            <button class="btn-salvar" id="btnExecutarImportProfissionais" onclick="executarImportacaoProfissionais()" disabled>
+              <i class="fas fa-download"></i> Iniciar Importação
+            </button>
+            <button class="btn-cancelar" onclick="fecharModalImportacaoProfissionais()">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL DE MODELOS DE DOCUMENTOS -->
+    <div id="modalModelos" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande">
+        <div class="modal-header">
+          <h2><i class="fas fa-file-alt"></i> Modelos de Documentos</h2>
+          <button class="close-btn" onclick="fecharModalModelos()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <!-- Abas: apenas para Admin aparece Upload -->
+          <div id="abasModelos" style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button class="btn-pequeno" id="abaListarModelosBtn" onclick="mostrarAbaListarModelos()"><i class="fas fa-list"></i> Modelos Disponíveis</button>
+            <button class="btn-pequeno" id="abaUploadModeloBtn" onclick="mostrarAbaUploadModelo()" style="display:none;"><i class="fas fa-upload"></i> Enviar Modelo</button>
+            <button class="btn-pequeno" onclick="mostrarAbaUploadModeloEscola()" style="display:none;" id="btnUploadModeloEscola">
+              <i class="fas fa-upload"></i> Enviar Modelo da Escola
+            </button>
+          </div>
+          <!-- Upload de Modelo da Escola -->
+          <div id="abaUploadModeloEscola" style="display:none;">
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-tag"></i></span>
+              <input type="text" id="nomeModeloEscola" list="listaModelosExistentes" placeholder="Nome do modelo (ex.: Formulário de Autorização)">
+              <datalist id="listaModelosExistentes"></datalist>
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-paperclip"></i></span>
+              <input type="file" id="arquivoModeloEscola" accept=".doc,.docx,.pdf,.odt,.xlsx,.pptx">
+            </div>
+            <div class="modal-actions">
+              <button class="btn-salvar" onclick="fazerUploadModeloEscola()"><i class="fas fa-cloud-upload-alt"></i> Enviar Modelo</button>
+              <button class="btn-cancelar" onclick="fecharModalModelos()">Cancelar</button>
+            </div>
+          </div>
+          <!-- Aba Listar -->
+          <div id="abaListarModelos">
+            <p style="margin-bottom:16px; color:#64748b;">
+              <i class="fas fa-info-circle"></i> Selecione um modelo para visualizar ou baixar.
+            </p>
+            <select id="selectModeloVisualizar" class="select-moderno" onchange="mostrarDetalheModelo(this.value)">
+              <option value="">Selecione um modelo...</option>
+            </select>
+            <div id="detalheModeloSelecionado"></div>
+          </div>
+          
+          <!-- Aba Upload (visível apenas para Admin) -->
+          <div id="abaUploadModelo" style="display:none;">
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-tag"></i></span>
+              <select id="selectTipoModelo">
+                <option value="">Selecione o tipo de modelo</option>
+                <!-- Será preenchido via JS com LISTA_MODELOS -->
+              </select>
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-paperclip"></i></span>
+              <input type="file" id="arquivoModelo" accept=".doc,.docx,.pdf,.odt,.xlsx,.pptx">
+            </div>
+            <div class="modal-actions">
+              <button class="btn-salvar" onclick="fazerUploadModelo()"><i class="fas fa-cloud-upload-alt"></i> Enviar</button>
+              <button class="btn-cancelar" onclick="fecharModalModelos()">Cancelar</button>
+            </div>
+          </div>
+          
+          <div class="modal-actions" style="margin-top:20px;">
+            <button class="btn-cancelar" onclick="fecharModalModelos()">Fechar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- MODAL DE ALUNOS INATIVOS (TRANSFERIDOS/CONCLUÍDOS) -->
+    <div id="modalInativos" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande">
+        <div class="modal-header">
+          <h2><i class="fas fa-archive"></i> Alunos Transferidos / Concluídos</h2>
+          <button class="close-btn" onclick="fecharModalInativos()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <!-- Filtros -->
+          <div class="filtros-container" style="padding:0; margin-bottom:16px;">
+            <div class="input-icon" style="flex:2;">
+              <span class="icon"><i class="fas fa-search"></i></span>
+              <input type="text" id="filtroNomeInativo" placeholder="Buscar por nome...">
+            </div>
+            <div class="input-icon" style="flex:1;">
+              <span class="icon"><i class="fas fa-book"></i></span>
+              <select id="filtroTurmaInativo">
+                <option value="">Todas as turmas</option>
+              </select>
+            </div>
+            <button class="btn-primary" onclick="buscarInativos(1)"><i class="fas fa-search"></i> Buscar</button>
+          </div>
+          
+          <!-- Lista de inativos -->
+          <div id="listaInativosContainer" style="max-height: 400px; overflow-y: auto;"></div>
+          
+          <!-- Paginação -->
+          <div id="paginacaoInativos" class="paginacao-container" style="margin-top:16px;"></div>
+          
+          <div class="modal-actions">
+            <button class="btn-cancelar" onclick="fecharModalInativos()">Fechar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+        
+    <!-- 🔔 MODAL DE NOTIFICAÇÕES (somente avisos) -->
+    <div id="modalNotificacoes" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande">
+        <div class="modal-header">
+          <h2><i class="fas fa-bell"></i> Notificações</h2>
+          <button class="close-btn" onclick="fecharNotificacoes()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <div id="listaNotificacoes" style="max-height: 400px; overflow-y: auto;"></div>
+        </div>
+      </div>
+    </div>
+    <!-- 📅 MODAL DE AGENDA -->
+    <div id="modalAgenda" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande modal-card--fullscreen">
+        <div class="modal-header">
+          <h2><i class="fas fa-calendar-alt"></i> Agenda</h2>
+          <button class="close-btn" onclick="fecharModalAgenda()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <!-- Botões das abas -->
+          <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+            <button class="btn-primary" onclick="mostrarAbaMinhaAgenda()"><i class="fas fa-list"></i> Minha Agenda</button>
+            <button class="btn-primary" id="btnNovaVisita" onclick="mostrarAbaNovaVisita()" style="display:none;">
+              <i class="fas fa-plus"></i> Nova Visita
+            </button>
+            <button class="btn-primary" onclick="mostrarAbaNovoEventoPessoal()"><i class="fas fa-plus"></i> Evento Pessoal</button>
+          </div>
+          
+          <!-- Aba: Minha Agenda -->
+          <div id="abaMinhaAgenda" style="display:block;">
+                  <!-- Calendário mensal -->
+          <div id="calendarioAgenda" style="margin-bottom: 20px; background: var(--card-bg); border-radius: 16px; padding: 16px; border: 1px solid var(--card-border);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <button id="btnMesAnterior" onclick="navegarCalendario(-1)" class="btn-pequeno"><i class="fas fa-chevron-left"></i></button>
+              <span id="tituloMesCalendario" style="font-weight: 600; font-size: 16px; color: var(--text-primary);"></span>
+              <button id="btnMesProximo" onclick="navegarCalendario(1)" class="btn-pequeno"><i class="fas fa-chevron-right"></i></button>
+            </div>
+            <div id="calendarioGrid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; font-size: 14px;"></div>
+            <div id="eventosDoDia" style="margin-top: 12px; font-size: 13px; color: var(--text-secondary);"></div>
+          </div>
+            <div id="listaAgenda" style="max-height: 400px; overflow-y: auto;"></div>
+          </div>
+
+          
+          
+          <!-- Aba: Nova Visita (apenas supervisor) -->
+          <div id="abaNovaVisita" style="display:none;">
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-school"></i></span>
+              <select id="selectEscolaVisita">
+                <option value="">Selecione a escola</option>
+              </select>
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-calendar"></i></span>
+              <input type="text" id="dataVisita" placeholder="DD/MM/AAAA" oninput="aplicarMascaraData(this)">
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-clock"></i></span>
+              <input type="text" id="horaVisita" placeholder="HH:MM" oninput="aplicarMascaraHora(this)">
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-pencil-alt"></i></span>
+              <textarea id="descricaoVisita" rows="2" placeholder="Descrição (opcional)"></textarea>
+            </div>
+            <button class="btn-salvar" onclick="criarVisita()">Agendar Visita</button>
+          </div>
+          
+          <!-- Aba: Evento Pessoal -->
+          <div id="abaNovoEventoPessoal" style="display:none;">
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-calendar"></i></span>
+              <input type="text" id="dataPessoal" placeholder="DD/MM/AAAA" oninput="aplicarMascaraData(this)">
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-clock"></i></span>
+              <input type="text" id="horaPessoal" placeholder="HH:MM" oninput="aplicarMascaraHora(this)">
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-pencil-alt"></i></span>
+              <textarea id="descricaoPessoal" rows="2" placeholder="Descrição"></textarea>
+            </div>
+            <button class="btn-salvar" onclick="criarEventoPessoal()">Salvar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 📤 MODAL DE PROMOÇÃO (CSV) -->
+    <div id="modalPromocao" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande">
+        <div class="modal-header">
+          <h2><i class="fas fa-arrow-up"></i> Promover Alunos (CSV)</h2>
+          <button class="close-btn" onclick="fecharModalPromocao()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <p style="margin-bottom:16px;">Selecione o arquivo CSV com os dados atualizados (deve conter a coluna <strong>id</strong>).
+            <br>Alunos existentes terão a <strong>turma</strong> atualizada. Alunos novos serão cadastrados automaticamente.</p>
+          <input type="file" id="arquivoCSVPromocao" accept=".csv,text/csv" style="margin-bottom:12px;">
+          <button class="btn-primary" onclick="processarCSVPromocao()"><i class="fas fa-list"></i> Carregar Pré-visualização</button>
+          <div id="previewPromocao" style="max-height: 300px; overflow: auto; margin-top: 12px; border:1px solid var(--card-border); border-radius:8px;"></div>
+          <div id="statusPromocao" style="margin-top: 8px; font-size: 14px; color: var(--text-muted);"></div>
+          <div style="margin-top:16px;">
+            <button class="btn-salvar" id="btnExecutarPromocao" onclick="executarPromocaoCSV()" disabled><i class="fas fa-check-circle"></i> Promover Alunos</button>
+            <button class="btn-cancelar" onclick="fecharModalPromocao()">Cancelar</button>
+          </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 📥 MODAL ATUALIZAR ALUNOS MATRICULADOS -->
+    <div id="modalAtualizarMatriculados" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande">
+        <div class="modal-header">
+          <h2><i class="fas fa-sync-alt"></i> Atualizar Alunos Matriculados</h2>
+          <button class="close-btn" onclick="fecharModalAtualizarMatriculados()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <p style="margin-bottom:16px;">
+            Faça upload do CSV com os dados atuais dos alunos.<br>
+            <strong>Apenas novos alunos (IDs não existentes) serão inseridos.</strong> Alunos já cadastrados não serão alterados.
+          </p>
+          <input type="file" id="arquivoCSVAtualizar" accept=".csv,text/csv" style="margin-bottom:12px;">
+          <button class="btn-primary" onclick="processarCSVAtualizar()"><i class="fas fa-list"></i> Carregar Pré-visualização</button>
+          <div id="previewAtualizar" style="max-height: 300px; overflow: auto; margin-top: 12px; border:1px solid var(--card-border); border-radius:8px;"></div>
+          <div id="statusAtualizar" style="margin-top: 8px; font-size: 14px; color: var(--text-muted);"></div>
+          <div style="margin-top:16px;">
+            <button class="btn-salvar" id="btnExecutarAtualizarMatriculados" onclick="executarAtualizarMatriculados()" disabled><i class="fas fa-check-circle"></i> Atualizar</button>
+            <button class="btn-cancelar" onclick="fecharModalAtualizarMatriculados()">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+      
+      <!-- 📊 MODAL DE DASHBOARD DE PENDÊNCIAS -->
+      <div id="modalDashboard" class="modal-overlay" style="display:none;">
+        <div class="modal-card modal-card--grande">
+          <div class="modal-header">
+            <h2><i class="fas fa-chart-bar"></i> Dashboard de Pendências</h2>
+            <button class="close-btn" onclick="fecharModalDashboard()"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="modal-body">
+            <!-- Filtro de Escola (apenas supervisor) -->
+            <div id="dashboardFiltroEscolaWrapper" style="margin-bottom: 16px; display: none;">
+              <select id="dashboardFiltroEscola" onchange="carregarDashboard()" class="input-icon">
+                <option value="">Todas as escolas</option>
+              </select>
+            </div>
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
+              <button class="btn-salvar" onclick="exportarDashboardPDF()">
+                <i class="fas fa-file-pdf"></i> Exportar PDF
+              </button>
+            </div>
+            <div id="dashboardContainer" style="max-height: 500px; overflow-y: auto;">
+              <p>Carregando...</p>
+            </div>
+            <div class="modal-actions">
+              <button class="btn-cancelar" onclick="fecharModalDashboard()">Fechar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- MODAL ALTERAR SENHA (PRÓPRIO USUÁRIO) -->
+    <div id="modalAlterarSenha" class="modal-overlay" style="display:none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2><i class="fas fa-key"></i> Alterar Senha</h2>
+          <button class="close-btn" onclick="fecharModalAlterarSenha()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-lock"></i></span>
+            <input type="password" id="senhaAtual" placeholder="Senha atual">
+            <span class="toggle-password" onclick="toggleSenha(this)">
+              <i class="far fa-eye"></i>
+            </span>
+          </div>
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-key"></i></span>
+            <input type="password" id="novaSenha" placeholder="Nova senha (mín. 6 caracteres)">
+            <span class="toggle-password" onclick="toggleSenha(this)">
+              <i class="far fa-eye"></i>
+            </span>
+          </div>
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-check"></i></span>
+            <input type="password" id="confirmarNovaSenha" placeholder="Confirmar nova senha">
+            <span class="toggle-password" onclick="toggleSenha(this)">
+              <i class="far fa-eye"></i>
+            </span>
+          </div>
+          <div class="modal-actions">
+            <button class="btn-salvar" onclick="alterarMinhaSenha()">Salvar</button>
+            <button class="btn-cancelar" onclick="fecharModalAlterarSenha()">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- MODAL DE CHECKLIST EM LOTE -->
+    <div id="modalChecklistLote" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande" style="max-width: 1150px;">
+        <div class="modal-header">
+          <h2><i class="fas fa-clipboard-check"></i> Checklist em Lote</h2>
+          <button class="close-btn" onclick="fecharModalChecklistLote()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="info-escola">
+            <i class="fas fa-school"></i> <span id="escolaAtualChecklist"></span>
+          </div>
+
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-book"></i></span>
+            <select id="selectTurmaChecklist" onchange="carregarAlunosParaChecklist()">
+              <option value="">Selecione uma turma</option>
+            </select>
+          </div>
+
+          <!-- Botões de marcar/desmarcar todos -->
+          <div id="acoesChecklistLote" style="display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap;">
+            <button type="button" class="btn-pequeno" onclick="marcarTodosDocumentos(true)">
+              <i class="fas fa-check-double"></i> Marcar Todos
+            </button>
+            <button type="button" class="btn-pequeno" onclick="marcarTodosDocumentos(false)">
+              <i class="fas fa-times-circle"></i> Desmarcar Todos
+            </button>
+          </div>
+
+          <div id="listaChecklistContainer" style="max-height: 400px; overflow-y: auto; margin-top: 8px; border: 1px solid var(--card-border); border-radius: 12px;">
+            <p style="padding:20px; text-align:center;">Selecione uma turma...</p>
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn-salvar" onclick="salvarChecklistEmLote()">
+              <i class="fas fa-save"></i> Salvar Alterações
+            </button>
+            <button class="btn-cancelar" onclick="fecharModalChecklistLote()">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- ⚖️ MODAL DE LEGISLAÇÃO -->
+    <div id="modalLegislacao" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande modal-card--fullscreen">
+        <div class="modal-header">
+          <h2><i class="fas fa-balance-scale"></i> Legislação</h2>
+          <button class="close-btn" onclick="fecharModalLegislacao()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button class="btn-pequeno" id="abaCadastrarLegislacaoBtn" onclick="mostrarAbaCadastroLegislacao()">
+              <i class="fas fa-plus"></i> Cadastrar
+            </button>
+            <button class="btn-pequeno" onclick="mostrarAbaConsultaLegislacao()">
+              <i class="fas fa-search"></i> Consultar
+            </button>
+          </div>
+
+          <!-- Aba de Cadastro -->
+          <div id="abaCadastroLegislacao" style="display:block;">
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-tag"></i></span>
+              <select id="tipoLegislacao" class="select-moderno">
+                <option value="">Selecione o tipo</option>
+                <optgroup label="Atos Normativos">
+                  <option value="Portaria">Portaria</option>
+                  <option value="Resolução">Resolução</option>
+                  <option value="Resolução Normativa">Resolução Normativa</option>
+                  <option value="Instrução Normativa">Instrução Normativa</option>
+                  <option value="Norma">Norma</option>
+                  <option value="Norma Técnica">Norma Técnica</option>
+                  <option value="Regimento">Regimento</option>
+                  <option value="Regulamento">Regulamento</option>
+                  <option value="Deliberação">Deliberação</option>
+                  <option value="Ato Normativo">Ato Normativo</option>
+                </optgroup>
+                <optgroup label="Legislação">
+                  <option value="Lei">Lei</option>
+                  <option value="Lei Complementar">Lei Complementar</option>
+                  <option value="Decreto">Decreto</option>
+                  <option value="Decreto Legislativo">Decreto Legislativo</option>
+                  <option value="Medida Provisória">Medida Provisória</option>
+                  <option value="Emenda Constitucional">Emenda Constitucional</option>
+                </optgroup>
+                <optgroup label="Atos Administrativos e Comunicações">
+                  <option value="Ofício">Ofício</option>
+                  <option value="Ofício Circular">Ofício Circular</option>
+                  <option value="Circular">Circular</option>
+                  <option value="Memorando">Memorando</option>
+                  <option value="Despacho">Despacho</option>
+                  <option value="Ato Declaratório">Ato Declaratório</option>
+                  <option value="Parecer">Parecer</option>
+                  <option value="Recomendação">Recomendação</option>
+                  <option value="Nota Técnica">Nota Técnica</option>
+                  <option value="Nota Informativa">Nota Informativa</option>
+                  <option value="Orientação Técnica">Orientação Técnica</option>
+                  <option value="Guia">Guia</option>
+                  <option value="Manual">Manual</option>
+                  <option value="Protocolo">Protocolo</option>
+                  <option value="Edital">Edital</option>
+                </optgroup>
+                <optgroup label="Decisões Judiciais">
+                  <option value="Acórdão">Acórdão</option>
+                  <option value="Súmula">Súmula</option>
+                  <option value="Decisão Judicial">Decisão Judicial</option>
+                </optgroup>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
+            <div style="display: flex; gap: 12px;">
+              <div class="input-icon" style="flex:1;">
+                <span class="icon"><i class="fas fa-hashtag"></i></span>
+                <input type="text" id="numeroLegislacao" placeholder="Número (ex.: 015)">
+              </div>
+              <div class="input-icon" style="flex:1;">
+                <span class="icon"><i class="fas fa-calendar"></i></span>
+                <input type="number" id="anoLegislacao" placeholder="Ano (ex.: 2025)" min="1900" max="2100">
+              </div>
+            </div>
+
+            <!-- Título Assunto -->
+            <p style="font-weight: 500; margin-bottom: 4px; color: var(--text-primary);">Assunto / Nome da Legislação</p>
+            <div class="input-icon">
+              <textarea id="assuntoLegislacao" rows="2" placeholder=""></textarea>
+            </div>
+
+            <!-- Título Palavras‑chave -->
+            <p style="font-weight: 500; margin-bottom: 4px; color: var(--text-primary);">Palavras‑chave</p>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-tags"></i></span>
+              <input type="text" id="palavrasChaveLegislacao" placeholder="Ex.: matrícula, transferência, frequência">
+            </div>
+
+            <!-- Título Data de Publicação -->
+            <p style="font-weight: 500; margin-bottom: 4px; color: var(--text-primary);">Data de Publicação</p>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-calendar-alt"></i></span>
+              <input type="date" id="dataPublicacaoLegislacao">
+            </div>
+
+            <!-- Título Observações -->
+            <p style="font-weight: 500; margin-bottom: 4px; color: var(--text-primary);">Observações</p>
+            <div class="input-icon">
+              <textarea id="observacoesLegislacao" rows="2" placeholder=""></textarea>
+            </div>
+
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-paperclip"></i></span>
+              <input type="file" id="arquivoLegislacao" accept=".pdf,.doc,.docx,.odt">
+            </div>
+
+            <!-- Seção de Vínculos (DROPDOWN) -->
+            <div style="margin-top: 16px; border-top: 1px solid var(--card-border); padding-top: 16px;">
+              <h4 style="margin:0 0 12px;"><i class="fas fa-link"></i> Vincular a outra legislação (opcional)</h4>
+              <div style="margin-bottom: 12px;">
+                <div class="input-icon" style="margin-bottom: 8px;">
+                  <span class="icon"><i class="fas fa-search"></i></span>
+                  <input type="text" id="buscaVinculo" placeholder="Filtrar legislação..." 
+                        oninput="filtrarSelectVinculacao(this.value, 'selectVinculo', window.legislacoesParaVinculo)">
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <select id="selectVinculo" style="flex:2;">
+                    <option value="">Selecionar documento...</option>
+                  </select>
+                  <button type="button" class="btn-pequeno" onclick="adicionarVinculoDoSelect()">
+                    <i class="fas fa-plus"></i> Vincular
+                  </button>
+                </div>
+              </div>
+              <div id="vinculosAdicionados"></div>
+            </div>
+
+            <div class="modal-actions">
+              <button class="btn-salvar" onclick="cadastrarLegislacao()">Salvar</button>
+              <button class="btn-cancelar" onclick="fecharModalLegislacao()">Cancelar</button>
+            </div>
+          </div>
+
+          <!-- Aba de Consulta -->
+          <div id="abaConsultaLegislacao" style="display:none;">
+            <div class="filtros-container" style="padding:0; margin-bottom:16px;">
+              <div class="input-icon">
+                <span class="icon"><i class="fas fa-tag"></i></span>
+                <select id="filtroTipoLegislacao" class="select-moderno">
+                  <option value="">Selecione o tipo</option>
+                  <optgroup label="Atos Normativos">
+                    <option value="Portaria">Portaria</option>
+                    <option value="Resolução">Resolução</option>
+                    <option value="Resolução Normativa">Resolução Normativa</option>
+                    <option value="Instrução Normativa">Instrução Normativa</option>
+                    <option value="Norma">Norma</option>
+                    <option value="Norma Técnica">Norma Técnica</option>
+                    <option value="Regimento">Regimento</option>
+                    <option value="Regulamento">Regulamento</option>
+                    <option value="Deliberação">Deliberação</option>
+                    <option value="Ato Normativo">Ato Normativo</option>
+                  </optgroup>
+                  <optgroup label="Legislação">
+                    <option value="Lei">Lei</option>
+                    <option value="Lei Complementar">Lei Complementar</option>
+                    <option value="Decreto">Decreto</option>
+                    <option value="Decreto Legislativo">Decreto Legislativo</option>
+                    <option value="Medida Provisória">Medida Provisória</option>
+                    <option value="Emenda Constitucional">Emenda Constitucional</option>
+                  </optgroup>
+                  <optgroup label="Atos Administrativos e Comunicações">
+                    <option value="Ofício">Ofício</option>
+                    <option value="Ofício Circular">Ofício Circular</option>
+                    <option value="Circular">Circular</option>
+                    <option value="Memorando">Memorando</option>
+                    <option value="Despacho">Despacho</option>
+                    <option value="Ato Declaratório">Ato Declaratório</option>
+                    <option value="Parecer">Parecer</option>
+                    <option value="Recomendação">Recomendação</option>
+                    <option value="Nota Técnica">Nota Técnica</option>
+                    <option value="Nota Informativa">Nota Informativa</option>
+                    <option value="Orientação Técnica">Orientação Técnica</option>
+                    <option value="Guia">Guia</option>
+                    <option value="Manual">Manual</option>
+                    <option value="Protocolo">Protocolo</option>
+                    <option value="Edital">Edital</option>
+                  </optgroup>
+                  <optgroup label="Decisões Judiciais">
+                    <option value="Acórdão">Acórdão</option>
+                    <option value="Súmula">Súmula</option>
+                    <option value="Decisão Judicial">Decisão Judicial</option>
+                  </optgroup>
+                  <option value="Outro">Outro</option>
+                </select>
+              </div>
+              <div class="input-icon" style="flex: 0 0 130px;">
+                <span class="icon"><i class="fas fa-calendar"></i></span>
+                <input type="number" id="filtroAnoLegislacao" placeholder="Ano" min="1900" max="2100">
+              </div>
+              <div class="input-icon" style="flex:2;">
+                <span class="icon"><i class="fas fa-search"></i></span>
+                <input type="text" id="filtroAssuntoLegislacao" placeholder="Buscar por assunto...">
+              </div>
+              <div class="input-icon" style="flex:2;">
+                <span class="icon"><i class="fas fa-tags"></i></span>
+                <input type="text" id="filtroPalavrasChaveLegislacao" placeholder="Buscar por palavras‑chave...">
+              </div>
+              <!-- DROPDOWN DE DOCUMENTOS SALVOS -->
+              <div class="input-icon" style="flex:2;">
+                <span class="icon"><i class="fas fa-file-alt"></i></span>
+                <select id="filtroDocumentoId" onchange="abrirDetalheLegislacao(this.value)">
+                  <option value="">Selecionar documento...</option>
+                </select>
+              </div>
+              <button class="btn-primary" onclick="buscarLegislacao()">
+                <i class="fas fa-search"></i> Buscar
+              </button>
+            </div>
+            <div id="listaLegislacaoContainer" style="max-height:400px; overflow-y:auto;"></div>
+            <div id="detalheLegislacaoContainer" style="margin-top: 16px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Mini‑modal de edição de legislação -->
+    <div id="modalEditarLegislacao" class="mini-modal-overlay" style="display:none;">
+      <div class="mini-modal">
+        <h3>Editar Legislação</h3>
+        <label>Tipo</label>
+        <select id="editTipoLegislacao" class="select-moderno">
+          <option value="">Tipo</option>
+          <optgroup label="Atos Normativos">
+            <option value="Portaria">Portaria</option>
+            <option value="Resolução">Resolução</option>
+            <option value="Resolução Normativa">Resolução Normativa</option>
+            <option value="Instrução Normativa">Instrução Normativa</option>
+            <option value="Norma">Norma</option>
+            <option value="Norma Técnica">Norma Técnica</option>
+            <option value="Regimento">Regimento</option>
+            <option value="Regulamento">Regulamento</option>
+            <option value="Deliberação">Deliberação</option>
+            <option value="Ato Normativo">Ato Normativo</option>
+          </optgroup>
+          <optgroup label="Legislação">
+            <option value="Lei">Lei</option>
+            <option value="Lei Complementar">Lei Complementar</option>
+            <option value="Decreto">Decreto</option>
+            <option value="Decreto Legislativo">Decreto Legislativo</option>
+            <option value="Medida Provisória">Medida Provisória</option>
+            <option value="Emenda Constitucional">Emenda Constitucional</option>
+          </optgroup>
+          <optgroup label="Atos Administrativos e Comunicações">
+            <option value="Ofício">Ofício</option>
+            <option value="Ofício Circular">Ofício Circular</option>
+            <option value="Circular">Circular</option>
+            <option value="Memorando">Memorando</option>
+            <option value="Despacho">Despacho</option>
+            <option value="Ato Declaratório">Ato Declaratório</option>
+            <option value="Parecer">Parecer</option>
+            <option value="Recomendação">Recomendação</option>
+            <option value="Nota Técnica">Nota Técnica</option>
+            <option value="Nota Informativa">Nota Informativa</option>
+            <option value="Orientação Técnica">Orientação Técnica</option>
+            <option value="Guia">Guia</option>
+            <option value="Manual">Manual</option>
+            <option value="Protocolo">Protocolo</option>
+            <option value="Edital">Edital</option>
+          </optgroup>
+          <optgroup label="Decisões Judiciais">
+            <option value="Acórdão">Acórdão</option>
+            <option value="Súmula">Súmula</option>
+            <option value="Decisão Judicial">Decisão Judicial</option>
+          </optgroup>
+          <option value="Outro">Outro</option>
+        </select>
+        <label>Número</label>
+        <input type="text" id="editNumeroLegislacao" />
+        <label>Ano</label>
+        <input type="number" id="editAnoLegislacao" min="1900" max="2100" />
+        <label>Assunto</label>
+        <textarea id="editAssuntoLegislacao" rows="2"></textarea>
+        <label>Data de Publicação</label>
+        <input type="date" id="editDataPublicacaoLegislacao" />
+        <label>Observações</label>
+        <textarea id="editObservacoesLegislacao" rows="2"></textarea>
+        <label>Palavras‑chave</label>
+        <input type="text" id="editPalavrasChaveLegislacao" />
+        <label>Substituir PDF (opcional)</label>
+        <input type="file" id="editArquivoLegislacao" accept=".pdf,.doc,.docx,.odt" />
+
+        <!-- Seção de Vínculos na Edição -->
+        <div style="margin-top: 16px; border-top: 1px solid #d1d5db; padding-top: 16px;">
+          <h4 style="margin:0 0 12px;"><i class="fas fa-link"></i> Vínculos</h4>
+          <div style="margin-bottom: 12px;">
+            <div class="input-icon" style="margin-bottom: 8px;">
+              <span class="icon"><i class="fas fa-search"></i></span>
+              <input type="text" id="buscaEditVinculo" placeholder="Filtrar legislação..." 
+                    oninput="filtrarSelectVinculacao(this.value, 'selectEditVinculo', window.legislacoesParaEdicao)">
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <select id="selectEditVinculo" style="flex:2;">
+                <option value="">Selecionar documento...</option>
+              </select>
+              <button type="button" class="btn-pequeno" onclick="adicionarVinculoEdicaoDoSelect()">
+                <i class="fas fa-plus"></i> Vincular
+              </button>
+            </div>
+          </div>
+          <div id="vinculosEdicaoAdicionados"></div>
+        </div>
+
+        <div class="botoes-edicao">
+          <button class="btn-salvar" onclick="salvarEdicaoLegislacao()">Salvar</button>
+          <button class="btn-cancelar" onclick="fecharEdicaoLegislacao()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 📢 MODAL DE COMUNICADO -->
+    <div id="modalComunicado" class="modal-overlay" style="display:none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 id="tituloModalComunicado"><i class="fas fa-bullhorn"></i> Novo Comunicado</h2>
+          <button class="close-btn" onclick="fecharModalComunicado()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <div id="comunicadoEscolaWrapper" class="input-icon">
+            <span class="icon"><i class="fas fa-school"></i></span>
+            <select id="selectEscolaComunicado">
+              <option value="">Selecione a escola</option>
+            </select>
+          </div>
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-heading"></i></span>
+            <input type="text" id="tituloComunicado" placeholder="Título do comunicado">
+          </div>
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-align-left"></i></span>
+            <textarea id="textoComunicado" rows="4" placeholder="Texto do comunicado"></textarea>
+          </div>
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-flag"></i></span>
+            <select id="prioridadeComunicado">
+              <option value="informativo">ℹ️ Informativo</option>
+              <option value="importante">⚡ Importante</option>
+              <option value="urgente">⚠️ Urgente</option>
+            </select>
+          </div>
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-calendar-times"></i></span>
+            <input type="date" id="dataExpiracaoComunicado">
+            <p style="font-size:11px; color:var(--text-muted); margin-top:2px;">Data de expiração (opcional)</p>
+          </div>
+          <div class="checkbox-moderno">
+            <input type="checkbox" id="fixarComunicado">
+            <label for="fixarComunicado">📌 Fixar no topo</label>
+          </div>
+          <div class="modal-actions">
+            <button class="btn-salvar" onclick="salvarComunicado()">Publicar</button>
+            <button class="btn-cancelar" onclick="fecharModalComunicado()">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 🔐 MODAL DE CONSENTIMENTO LGPD + TERMO DE COMPROMISSO -->
+    <div id="modalConsentimento" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande">
+        <div class="modal-header">
+          <h2><i class="fas fa-shield-halved"></i> Consentimento e Termo de Compromisso</h2>
+          <button class="close-btn" onclick="logout()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <!-- Texto LGPD -->
+          <div style="max-height: 30vh; overflow-y: auto; padding-right: 8px; margin-bottom: 16px; border: 1px solid var(--card-border); border-radius: 12px; padding: 16px; background: var(--card-bg);">
+            <h3>Política de Privacidade e Termos de Uso</h3>
+            <p>Bem-vindo(a) ao sistema de Controle de Matrículas da SRE Afonso Cláudio. Para utilizar o sistema, você precisa concordar com nossos termos.</p>
+            <p>Coletamos seu nome, e-mail e telefone única e exclusivamente para fins de controle de matrícula escolar, em conformidade com a Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018).</p>
+            
+            <h4>🔒 Confidencialidade e Responsabilidade do Usuário</h4>
+            <p>Os dados armazenados neste sistema são de uso exclusivo da Superintendência Regional de Educação de Afonso Cláudio. É <strong>estritamente proibido</strong> compartilhar, copiar, distribuir ou divulgar qualquer informação contida neste sistema para pessoas não autorizadas, seja por e-mail, redes sociais, aplicativos de mensagens ou qualquer outro meio.</p>
+            
+            <p style="font-weight: 500;">O usuário se compromete a manter sigilo de todos os dados, informações técnicas e administrativas, obtidas ou não com sua participação, zelando pela privacidade dos indivíduos relacionados/listados nas pesquisas/consultas, mediante o compromisso de manter sigilo absoluto dessas informações, nos termos do inciso X do art. 5º da Constituição Federal; do art. 4º da Lei nº 8.159/1991; da Lei n° 13.709/2018 (LGPD) e do Decreto Estadual nº 4922-R, de 09 de julho de 2021, que institui a Política Estadual de Proteção de Dados Pessoais e da Privacidade do Poder Executivo Estadual em consonância com a Lei Federal nº 13.709, de 14 de agosto de 2018 (Lei Geral de Proteção de Dados Pessoais).</p>
+
+            <p>O usuário também se compromete a:</p>
+            <ul>
+              <li>Manter sua senha em sigilo absoluto, não a compartilhando com terceiros;</li>
+              <li>Não deixar o sistema aberto em computadores desbloqueados ou de acesso público;</li>
+              <li>Comunicar imediatamente à SRE qualquer suspeita de acesso indevido ou violação de dados;</li>
+              <li>Utilizar os dados exclusivamente para as finalidades de gestão escolar previstas pela SEDU/ES.</li>
+            </ul>
+            <p>O descumprimento destas obrigações poderá acarretar responsabilização administrativa, civil e criminal, nos termos da legislação vigente.</p>
+            <p>Seus dados não serão compartilhados com terceiros e você pode solicitar sua exclusão a qualquer momento entrando em contato com nosso Encarregado de Proteção de Dados pelo e-mail <strong>ecramos@sedu.es.gov.br</strong>.</p>
+          </div>
+
+          <!-- ⬇️ TERMO DE COMPROMISSO -->
+          <div style="border: 1px solid var(--card-border); border-radius: 12px; padding: 16px; margin-bottom: 16px; background: var(--card-bg);">
+            <h4><i class="fas fa-file-signature"></i> Termo de Sigilo e Confidencialidade</h4>
+            <p style="font-size:14px; color: var(--text-muted);">
+              Preencha os campos abaixo para gerar o Termo em PDF, assine no <strong>e-docs</strong> e depois envie o arquivo assinado.
+            </p>
+
+            <!-- Passo 1: preencher e gerar o PDF -->
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+              <div class="input-icon" style="grid-column: 1 / -1;">
+                <span class="icon"><i class="fas fa-user"></i></span>
+                <input type="text" id="termoNome" placeholder="Nome completo">
+              </div>
+              <div class="input-icon">
+                <span class="icon"><i class="fas fa-id-card"></i></span>
+                <input type="text" id="termoCpf" placeholder="CPF" maxlength="14" oninput="aplicarMascaraCPF(this)">
+              </div>
+              <div class="input-icon">
+                <span class="icon"><i class="fas fa-briefcase"></i></span>
+                <input type="text" id="termoFuncao" placeholder="Cargo / função">
+              </div>
+              <div class="input-icon">
+                <span class="icon"><i class="fas fa-school"></i></span>
+                <select id="termoEscola" style="width:100%; border:none; background:transparent; outline:none;">
+                  <option value="">Selecione a escola ou SRE</option>
+                  <option value="SRE Afonso Cláudio">SRE Afonso Cláudio</option>
+                </select>
+              </div>
+              <div class="input-icon">
+                <span class="icon"><i class="fas fa-map-marker-alt"></i></span>
+                <input type="text" id="termoCidade" placeholder="Cidade">
+              </div>
+              <div class="input-icon" style="grid-column: 1 / -1;">
+                <span class="icon"><i class="fas fa-calendar"></i></span>
+                <input type="text" id="termoData" placeholder="Data (ex.: 17 de agosto de 2026)">
+              </div>
+            </div>
+
+            <div style="display:flex; flex-wrap:wrap; gap: 8px; margin-bottom: 12px;">
+              <button type="button" class="btn-pequeno" id="btnGerarTermoPDF" onclick="gerarBaixarTermoPDF()">
+                <i class="fas fa-file-pdf"></i> <span class="btn-text">Gerar e baixar PDF</span>
+              </button>
+              <a href="https://e-docs.es.gov.br/Internal" target="_blank" rel="noopener" class="btn-pequeno">
+                <i class="fas fa-signature"></i> Abrir e-docs para assinar
+              </a>
+            </div>
+            <p style="font-size:13px; color: var(--text-muted); margin-top:-4px; margin-bottom:12px;">
+              1) Gere o PDF preenchido → 2) assine no e-docs → 3) baixe o assinado e envie abaixo.
+            </p>
+
+            <!-- Passo 2: enviar o PDF assinado -->
+            <div class="input-icon" style="margin-top: 8px;">
+              <span class="icon"><i class="fas fa-upload"></i></span>
+              <input type="file" id="arquivoTermo" accept=".pdf" onchange="validarArquivoTermo(this)">
+            </div>
+            <p id="statusUploadTermo" style="font-size:13px; color: var(--text-muted); margin-top: 8px;"></p>
+          </div>
+
+          <!-- Checkboxes -->
+          <div class="checkbox-moderno">
+            <input type="checkbox" id="aceiteLgpd">
+            <label for="aceiteLgpd">Declaro que li e aceito a Política de Privacidade e os Termos de Uso.</label>
+          </div>
+          <div class="checkbox-moderno">
+            <input type="checkbox" id="aceiteTermo">
+            <label for="aceiteTermo">Confirmo que li e aceito o Termo de Sigilo e Confidencialidade.</label>
+          </div>
+
+          <div class="modal-actions" style="margin-top: 16px;">
+            <button class="btn-salvar" id="btnEnviarConsentimento" onclick="enviarConsentimentoETermo()">
+              <i class="fas fa-check-circle"></i> Enviar e Aceitar
+            </button>
+            <button class="btn-cancelar" onclick="logout()">Recusar e Sair</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 📜 MODAL DE HISTÓRICO DE AÇÕES -->
+    <div id="modalHistorico" class="modal-overlay" style="display:none;">
+  <div class="modal-card modal-card--grande modal-card--fullscreen">
+        <div class="modal-header">
+          <h2><i class="fas fa-history"></i> Histórico de Ações</h2>
+          <button class="close-btn" onclick="fecharModalHistorico()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <!-- Barra de busca -->
+          <div class="input-icon" style="margin-bottom: 16px;">
+            <span class="icon"><i class="fas fa-search"></i></span>
+            <input type="text" id="buscaHistorico" placeholder="Filtrar ações..." oninput="filtrarLogs()">
+          </div>
+
+          <!-- Tabela de logs -->
+          <div id="conteudoLog" style="max-height: 60vh; overflow-y: auto;">
+            <p style="text-align:center; color: var(--text-muted);">Carregando...</p>
+          </div>
+
+          <div class="modal-actions" style="margin-top: 16px;">
+            <button class="btn-cancelar" onclick="fecharModalHistorico()">Fechar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 👥 MODAL DE APROVAÇÃO DE TERMOS (somente Admin) -->
+    <div id="modalAprovacaoTermos" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande">
+        <div class="modal-header">
+          <h2><i class="fas fa-file-signature"></i> Aprovação de Termos de Compromisso</h2>
+          <button class="close-btn" onclick="fecharModalAprovacaoTermos()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <div id="listaTermosContainer" style="max-height: 60vh; overflow-y: auto;"></div>
+          <div class="modal-actions">
+            <button class="btn-cancelar" onclick="fecharModalAprovacaoTermos()">Fechar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 📊 MODAL PLANO TÁTICO - PREENCHIMENTO MENSAL -->
+    <div id="modalPlanoTaticoMensal" class="modal-overlay" style="display:none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2><i class="fas fa-chart-line"></i> Plano Tático – Preenchimento Mensal</h2>
+          <button class="close-btn" onclick="fecharModalPlanoTaticoMensal()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <!-- Escola (apenas supervisor vê; para pedagogo fica oculto) -->
+          <div class="input-icon" id="planoTaticoEscolaWrapper" style="display:none;">
+            <span class="icon"><i class="fas fa-school"></i></span>
+            <select id="planoTaticoEscola">
+              <option value="">Selecione a escola</option>
+            </select>
+          </div>
+
+          <!-- Mês -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-calendar-alt"></i></span>
+            <select id="planoTaticoMes">
+              <option value="">Selecione o mês</option>
+              <option value="Março">Março</option>
+              <option value="Abril">Abril</option>
+              <option value="Maio">Maio</option>
+              <option value="Junho">Junho</option>
+              <option value="Julho">Julho</option>
+              <option value="Agosto">Agosto</option>
+              <option value="Setembro">Setembro</option>
+              <option value="Outubro">Outubro</option>
+              <option value="Novembro">Novembro</option>
+            </select>
+          </div>
+
+          <!-- Frequência -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-percentage"></i></span>
+            <input type="number" id="planoTaticoFrequencia" placeholder="Percentual de frequência" min="0" max="100" step="0.1">
+          </div>
+
+          <!-- Tutoria coletiva -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-users"></i></span>
+            <select id="planoTaticoTutoria">
+              <option value="">Tutoria coletiva realizada?</option>
+              <option value="SIM">SIM</option>
+              <option value="NÃO">NÃO</option>
+            </select>
+          </div>
+
+                
+                <!-- Evidências integradas -->
+          <div style="border-top: 1px solid var(--card-border); padding-top: 12px; margin-top: 12px;">
+            <p style="font-weight: 500; margin-bottom: 8px;"><i class="fas fa-paperclip"></i> Anexar Evidências (opcional)</p>
+            
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-percentage"></i></span>
+              <input type="file" id="ptMensalEvidenciaFreq" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx">
+              <p style="font-size:11px; color:var(--text-muted); margin:2px 0 0 0;">Evidência da Frequência</p>
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-users"></i></span>
+              <input type="file" id="ptMensalEvidenciaTut" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx">
+              <p style="font-size:11px; color:var(--text-muted); margin:2px 0 0 0;">Evidência da Tutoria</p>
+            </div>
+            <p style="font-size:11px; color:var(--text-muted);">Os arquivos serão enviados ao salvar.</p>
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn-salvar" id="btnSalvarPlanoTaticoMensal" onclick="salvarPlanoTaticoMensal()">
+              <span class="btn-text">Salvar</span>
+              <span class="spinner-btn" style="display:none;"></span>
+            </button>
+            <button class="btn-cancelar" onclick="fecharModalPlanoTaticoMensal()">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 📊 MODAL PLANO TÁTICO - PREENCHIMENTO TRIMESTRAL -->
+    <div id="modalPlanoTaticoTrimestral" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande" style="max-width: 900px;">
+        <div class="modal-header">
+          <h2><i class="fas fa-chart-bar"></i> Plano Tático – Preenchimento Trimestral</h2>
+          <button class="close-btn" onclick="fecharModalPlanoTaticoTrimestral()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <!-- Escola (apenas supervisor) -->
+          <div class="input-icon" id="planoTaticoTrimEscolaWrapper" style="display:none;">
+            <span class="icon"><i class="fas fa-school"></i></span>
+            <select id="planoTaticoTrimEscola">
+              <option value="">Selecione a escola</option>
+            </select>
+          </div>
+
+          <!-- Trimestre -->
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-calendar-check"></i></span>
+            <select id="planoTaticoTrimestre">
+              <option value="">Selecione o trimestre</option>
+              <option value="TRIM_1">1º Trimestre</option>
+              <option value="TRIM_2">2º Trimestre</option>
+              <option value="TRIM_3">3º Trimestre</option>
+            </select>
+          </div>
+
+          <!-- Pergunta 1 -->
+          <div style="margin-bottom: 16px;">
+            <p style="font-weight: 500; margin: 0 0 6px;">A escola registrou, no plano de ação, estratégias de intervenção pedagógica alinhadas aos resultados da AMA (com recorte por raça/cor, gênero e público da educação especial), após as aplicações no período?</p>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-lightbulb"></i></span>
+              <select id="ptrimEstrategiasIntervencao">
+                <option value="">Selecione</option>
+                <option value="SIM">SIM</option>
+                <option value="NÃO">NÃO</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Pergunta 2 -->
+          <div style="margin-bottom: 16px;">
+            <p style="font-weight: 500; margin: 0 0 6px;">A escola cumpriu integralmente as RPEs previstas para o trimestre em Língua Portuguesa?</p>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-book"></i></span>
+              <select id="ptrimRpePortugues">
+                <option value="">Selecione</option>
+                <option value="SIM">SIM</option>
+                <option value="NÃO">NÃO</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Pergunta 3 -->
+          <div style="margin-bottom: 16px;">
+            <p style="font-weight: 500; margin: 0 0 6px;">A escola cumpriu integralmente as RPEs previstas para o trimestre em Matemática?</p>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-calculator"></i></span>
+              <select id="ptrimRpeMatematica">
+                <option value="">Selecione</option>
+                <option value="SIM">SIM</option>
+                <option value="NÃO">NÃO</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Pergunta 4 -->
+          <div style="margin-bottom: 16px;">
+            <p style="font-weight: 500; margin: 0 0 6px;">A escola implementou ações pedagógicas a partir da análise dos resultados da AMA, após cada aplicação?</p>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-chalkboard-teacher"></i></span>
+              <select id="ptrimAcoesPedagogicas">
+                <option value="">Selecione</option>
+                <option value="SIM">SIM</option>
+                <option value="NÃO">NÃO</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Pergunta 5 -->
+          <div style="margin-bottom: 16px;">
+            <p style="font-weight: 500; margin: 0 0 6px;">A escola atingiu o percentual mínimo de 80% de professores de Língua Portuguesa com conclusão das trilhas de formação no período?</p>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-language"></i></span>
+              <select id="ptrimFormacaoLP">
+                <option value="">Selecione</option>
+                <option value="SIM">SIM</option>
+                <option value="NÃO">NÃO</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Pergunta 6 -->
+          <div style="margin-bottom: 16px;">
+            <p style="font-weight: 500; margin: 0 0 6px;">A escola atingiu o percentual mínimo de 80% de professores de Matemática com conclusão das trilhas de formação no período?</p>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-square-root-alt"></i></span>
+              <select id="ptrimFormacaoMAT">
+                <option value="">Selecione</option>
+                <option value="SIM">SIM</option>
+                <option value="NÃO">NÃO</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Evidências integradas -->
+          <div style="border-top: 1px solid var(--card-border); padding-top: 12px; margin-top: 12px;">
+            <p style="font-weight: 500; margin-bottom: 8px;"><i class="fas fa-paperclip"></i> Anexar Evidências (opcional)</p>
+            
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-lightbulb"></i></span>
+              <input type="file" id="ptTrimEvidenciaEstrategias" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx">
+              <p style="font-size:11px; color:var(--text-muted); margin:2px 0 0 0;">Estratégias de Intervenção</p>
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-book"></i></span>
+              <input type="file" id="ptTrimEvidenciaRpeLP" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx">
+              <p style="font-size:11px; color:var(--text-muted); margin:2px 0 0 0;">RPEs - Língua Portuguesa</p>
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-calculator"></i></span>
+              <input type="file" id="ptTrimEvidenciaRpeMAT" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx">
+              <p style="font-size:11px; color:var(--text-muted); margin:2px 0 0 0;">RPEs - Matemática</p>
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-chalkboard-teacher"></i></span>
+              <input type="file" id="ptTrimEvidenciaAcoes" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx">
+              <p style="font-size:11px; color:var(--text-muted); margin:2px 0 0 0;">Ações Pedagógicas</p>
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-language"></i></span>
+              <input type="file" id="ptTrimEvidenciaFormacaoLP" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx">
+              <p style="font-size:11px; color:var(--text-muted); margin:2px 0 0 0;">Formação - Língua Portuguesa</p>
+            </div>
+            <div class="input-icon">
+              <span class="icon"><i class="fas fa-square-root-alt"></i></span>
+              <input type="file" id="ptTrimEvidenciaFormacaoMAT" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx">
+              <p style="font-size:11px; color:var(--text-muted); margin:2px 0 0 0;">Formação - Matemática</p>
+            </div>
+            <p style="font-size:11px; color:var(--text-muted);">Os arquivos serão enviados ao salvar.</p>
+          </div>
+
+          <div class="modal-actions">
+          <button class="btn-salvar" id="btnSalvarPlanoTaticoTrim" onclick="salvarPlanoTaticoTrimestral()">
+            <span class="btn-text">Salvar</span>
+            <span class="spinner-btn" style="display:none;"></span>
+          </button>
+          <button class="btn-cancelar" onclick="fecharModalPlanoTaticoTrimestral()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <!-- 📊 MODAL ACOMPANHAMENTO PLANO TÁTICO (SUPERVISOR) -->
+    <div id="modalAcompanhamentoPT" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card--grande modal-card--fullscreen">
+        <div class="modal-header">
+          <h2><i class="fas fa-clipboard-list"></i> Acompanhamento do Plano Tático</h2>
+          <button class="close-btn" onclick="fecharModalAcompanhamentoPT()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+          <div id="tabelaAcompanhamentoPT"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-salvar" onclick="exportarPlanoTaticoPDF()">
+            <i class="fas fa-file-pdf"></i> Exportar Painel
+          </button>
+          <button class="btn-salvar" onclick="exportarPlanilhaCompletaPDF()" id="btnExportarPlanilhaCompleta" style="display:none;">
+            <i class="fas fa-file-pdf"></i> Exportar Planilha Completa
+          </button>
+          <a href="https://docs.google.com/spreadsheets/d/1R38FuhaLIyMpZkZDcdCn-hlkp71Lh6RVuIQeaEDPd_E/edit" target="_blank" class="btn-primary" style="text-decoration:none; padding:10px 16px; border-radius:8px;">
+            <i class="fas fa-external-link-alt"></i> Abrir Planilha
+          </a>
+          <button class="btn-cancelar" onclick="fecharModalAcompanhamentoPT()">Fechar</button>
+        </div>
+      </div>
+    </div>
+
+  <!-- 📄 MODAL GERADOR DE DOCUMENTOS (SUPERVISORES) -->
+  <div id="modalGeradorDocumentos" class="modal-overlay" style="display:none;">
+    <div class="modal-card modal-card--grande modal-card--fullscreen">
+      <div class="modal-header">
+        <h2><i class="fas fa-file-alt"></i> Gerar Documento</h2>
+        <button class="close-btn" onclick="fecharModalGeradorDocumentos()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <!-- Seleção do tipo de documento -->
+        <h3>Tipo de Documento</h3>
+        <div id="geradorTiposDocumento" class="document-types" style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:24px;"></div>
+        
+        <!-- Formulário dinâmico -->
+        <div id="geradorFormContainer" style="display:none;">
+          <h3 id="geradorFormTitulo"></h3>
+          <form id="geradorForm"></form>
+          <div class="modal-actions" style="margin-top:20px;">
+            <button class="btn-salvar" id="btnGerarDocumento" onclick="gerarDocumento()">
+              <i class="fas fa-file-pdf"></i> Gerar Documento
+            </button>
+            <button class="btn-cancelar" onclick="fecharModalGeradorDocumentos()">Cancelar</button>
+          </div>
+        </div>
+        
+        <!-- Resultado (download) -->
+        <div id="geradorResultado" style="display:none; margin-top:20px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE MONITORAMENTO DE VISITAS (FORA do modal anterior) -->
+  <div id="modalMonitoramento" class="modal-overlay" style="display:none;">
+    <div class="modal-card modal-card--grande modal-card--fullscreen">
+      <div class="modal-header">
+        <h2><i class="fas fa-clipboard-list"></i> Visita de Monitoramento Escolar</h2>
+        <button class="close-btn" onclick="fecharModalMonitoramento()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <!-- Abas -->
+        <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+          <button class="btn-primary" onclick="mostrarAbaMonitoramento('nova')">Nova Visita</button>
+          <button class="btn-primary" onclick="mostrarAbaMonitoramento('historico')">Histórico</button>
+        </div>
+
+        <!-- Aba Nova Visita -->
+        <div id="novaVisitaAba" style="display:block;">
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-school"></i></span>
+            <select id="monitoramentoEscola" onchange="renderizarChecklist()">
+              <option value="">Selecione a escola</option>
+            </select>
+          </div>
+          <div id="monitoramentoChecklist" style="max-height: 55vh; overflow-y: auto; padding: 8px; border: 1px solid var(--card-border); border-radius: 12px; margin-top: 12px;"></div>
+          
+          <div class="input-icon" style="margin-top: 16px;">
+            <span class="icon"><i class="fas fa-pencil-alt"></i></span>
+            <textarea id="monitoramentoObsGerais" rows="3" placeholder="Observações gerais e recomendações para a escola..."></textarea>
+          </div>
+
+          <div class="modal-actions" style="margin-top: 20px;">
+            <button class="btn-salvar" onclick="salvarVisita(false)">Salvar Rascunho</button>
+            <button class="btn-primary" onclick="salvarVisita(true)">Finalizar e Gerar Relatório</button>
+            <button class="btn-cancelar" onclick="fecharModalMonitoramento()">Cancelar</button>
+          </div>
+        </div>
+
+        <!-- Aba Histórico -->
+        <div id="historicoVisitasAba" style="display:none;">
+          <div class="input-icon">
+            <span class="icon"><i class="fas fa-school"></i></span>
+            <select id="historicoFiltroEscola" onchange="carregarListaVisitas()">
+              <option value="">Todas as escolas</option>
+            </select>
+          </div>
+          <div id="historicoVisitasLista" style="max-height: 60vh; overflow-y: auto; margin-top: 16px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+<div class="menu-overlay" id="menuOverlay" onclick="toggleMenu()"></div>
+  <!-- 🔽 RODAPÉ FIXO -->
+  <footer id="footerPrincipal">
+    <span>SRE Afonso Cláudio – Secretaria Escolar &copy; 2026</span>
+    <span style="margin: 0 12px;">|</span>
+    <span>Sistema de Controle de Matrículas</span>
+  </footer>
+
+<div class="menu-overlay" id="menuOverlay" onclick="toggleMenu()"></div>
+<!-- MODAL DETALHES DO PROFISSIONAL -->
+<div id="modalDetalhesProfissional" class="modal-overlay" style="display:none;">
+  <div class="modal-card modal-card--grande modal-card--fullscreen">
+    <div class="modal-header">
+      <h2 id="detalhesProfissionalTitulo">Carregando...</h2>
+      <button class="close-btn" onclick="fecharModalDetalhesProfissional()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+
+      <!-- ========== DADOS PESSOAIS ========== -->
+      <details open style="margin-bottom: 16px;">
+        <summary style="font-weight: 600; cursor: pointer; color: var(--primary);">
+          <i class="fas fa-user"></i> Dados Pessoais
+        </summary>
+        <table style="width:100%; border-collapse: collapse; margin-top: 8px;">
+          <tr><th style="width:40%;">Nome</th><td><input id="profNomeInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>CPF</th><td><input id="profCPFInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>RG</th><td><input id="profRGInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;" placeholder="Digite o número do RG"></td></tr>
+          <tr><th>Data de Nascimento</th><td><input type="date" id="profDataNascInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Sexo</th><td><input id="profSexoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Raça</th><td><input id="profRacaInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Nacionalidade</th><td><input id="profNacionalidadeInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>País de Origem</th><td><input id="profPaisOrigemInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Filiação 1 (Mãe)</th><td><input id="profFiliacao1Input" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Filiação 2 (Pai)</th><td><input id="profFiliacao2Input" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Logradouro</th><td><input id="profLogradouroInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Número</th><td><input id="profNumeroInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Complemento</th><td><input id="profComplementoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Bairro</th><td><input id="profBairroInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Cidade / UF</th><td><input id="profCidadeInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>CEP</th><td><input id="profCEPInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+        </table>
+      </details>
+
+      <!-- ========== NATURALIDADE E NASCIMENTO ========== -->
+      <details style="margin-bottom: 16px;">
+        <summary style="font-weight: 600; cursor: pointer; color: var(--primary);">
+          <i class="fas fa-map-marker-alt"></i> Naturalidade e Nascimento
+        </summary>
+        <table style="width:100%; border-collapse: collapse; margin-top: 8px;">
+          <tr><th style="width:40%;">UF Nascimento</th><td><input id="profUFNascimentoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Município Nascimento</th><td><input id="profMunicipioNascInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Certidão de Nascimento</th><td><input id="profCertidaoNascInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+        </table>
+      </details>
+
+      <!-- ========== DADOS FUNCIONAIS ========== -->
+      <details open style="margin-bottom: 16px;">
+        <summary style="font-weight: 600; cursor: pointer; color: var(--primary);">
+          <i class="fas fa-briefcase"></i> Dados Funcionais
+        </summary>
+        <table style="width:100%; border-collapse: collapse; margin-top: 8px;">
+          <tr><th style="width:40%;">Matrícula</th><td><input id="profMatriculaInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Cargo</th><td><input id="profCargoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Regime</th><td><input id="profRegimeInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Situação Lotação</th><td><input id="profSituacaoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Admissão Lotação</th><td><input type="date" id="profAdmissaoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Término Contrato</th><td><input type="date" id="profTerminoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Desligamento Lotação</th><td><input type="date" id="profDesligamentoLotacaoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Local Trabalho</th><td><input id="profLocalTrabalhoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+        </table>
+      </details>
+
+      <!-- ========== VÍNCULO E CARGAS HORÁRIAS ========== -->
+      <details style="margin-bottom: 16px;">
+        <summary style="font-weight: 600; cursor: pointer; color: var(--primary);">
+          <i class="fas fa-link"></i> Vínculo e Cargas Horárias
+        </summary>
+        <table style="width:100%; border-collapse: collapse; margin-top: 8px;">
+          <tr><th style="width:40%;">Situação Vínculo</th><td><input id="profSituacaoVinculoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Admissão Vínculo</th><td><input type="date" id="profAdmissaoVinculoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Desligamento Vínculo</th><td><input type="date" id="profDesligamentoVinculoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>CH Mensal</th><td><input id="profCHInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>CH Lotação</th><td><input id="profCHLotacaoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>CH Vínculo</th><td><input id="profCHVinculoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+        </table>
+      </details>
+
+      <!-- ========== FORMAÇÃO ACADÊMICA ========== -->
+      <details style="margin-bottom: 16px;">
+        <summary style="font-weight: 600; cursor: pointer; color: var(--primary);">
+          <i class="fas fa-graduation-cap"></i> Formação Acadêmica
+        </summary>
+        <table style="width:100%; border-collapse: collapse; margin-top: 8px;">
+          <tr><th style="width:40%;">Nível de Escolaridade</th><td><input id="profEscolaridadeInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Tipo Ensino Médio</th><td><input id="profTipoEnsinoMedioInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Curso Superior</th><td><input id="profCursoSuperiorInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Licenciatura</th><td><input id="profLicenciaturaInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Pós-Graduação (texto livre)</th><td><input id="profPosGraduacaoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Áreas de Conhecimento</th><td><input id="profAreasConhecimentoInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+        </table>
+      </details>
+
+      <!-- ========== CURSOS DE FORMAÇÃO (1 a 3) ========== -->
+      <details style="margin-bottom: 16px;">
+        <summary style="font-weight: 600; cursor: pointer; color: var(--primary);">
+          <i class="fas fa-certificate"></i> Cursos de Formação (detalhado)
+        </summary>
+        <div id="secaoCursosFormacao" style="margin-top: 8px;"></div>
+      </details>
+
+      <!-- ========== PÓS-GRADUAÇÕES (1 a 6) ========== -->
+      <details style="margin-bottom: 16px;">
+        <summary style="font-weight: 600; cursor: pointer; color: var(--primary);">
+          <i class="fas fa-book-open"></i> Pós-Graduações (detalhado)
+        </summary>
+        <div id="secaoPosGraduacoes" style="margin-top: 8px;"></div>
+      </details>
+
+      <!-- ========== INFORMAÇÕES ADICIONAIS ========== -->
+      <details style="margin-bottom: 16px;">
+        <summary style="font-weight: 600; cursor: pointer; color: var(--primary);">
+          <i class="fas fa-info-circle"></i> Informações Adicionais
+        </summary>
+        <table style="width:100%; border-collapse: collapse; margin-top: 8px;">
+          <tr><th style="width:40%;">INEP</th><td><input id="profINEPInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Povo Indígena</th><td><input id="profPovoIndigenaInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Localização Diferenciada</th><td><input id="profLocalizacaoDiferenciadaInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Deficiências</th><td><input id="profDeficienciasInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Transtorno Global</th><td><input id="profTranstornoGlobalInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Altas Habilidades</th><td><input id="profAltasHabilidadesInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Zona Residência</th><td><input id="profZonaResidenciaInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Outros Cursos</th><td><textarea id="profOutrosCursosInput" rows="2" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></textarea></td></tr>
+        </table>
+      </details>
+
+      <!-- ========== CONTATO E DISCIPLINAS ========== -->
+      <details style="margin-bottom: 16px;">
+        <summary style="font-weight: 600; cursor: pointer; color: var(--primary);">
+          <i class="fas fa-envelope"></i> Contato e Disciplinas
+        </summary>
+        <table style="width:100%; border-collapse: collapse; margin-top: 8px;">
+          <tr><th style="width:40%;">E-mail</th><td><input id="profEmailInput" class="form-control" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></td></tr>
+          <tr><th>Turmas</th><td><textarea id="profTurmasInput" rows="2" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></textarea></td></tr>
+          <tr><th>Disciplinas</th><td><textarea id="profDisciplinasInput" rows="2" style="width:100%; padding:6px 10px; border:1px solid var(--input-border); border-radius:6px;"></textarea></td></tr>
+        </table>
+      </details>
+
+      <div class="modal-actions">
+        <button class="btn-salvar" onclick="salvarEdicaoProfissional()"><i class="fas fa-save"></i> Salvar alterações</button>
+        <button class="btn-cancelar" onclick="fecharModalDetalhesProfissional()">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- 📊 MODAL DASHBOARD DE PROFISSIONAIS -->
+<div id="modalDashboardProfissionais" class="modal-overlay" style="display:none;">
+    <div class="modal-card modal-card--grande modal-card--fullscreen">
+    <div class="modal-header">
+      <h2><i class="fas fa-chart-bar"></i> Dashboard de Profissionais</h2>
+      <button class="close-btn" onclick="fecharDashboardProfissionais()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="dashboardProfFiltroEscolaWrapper" style="margin-bottom: 16px; display: none;">
+        <select id="dashboardProfFiltroEscola" onchange="carregarDashboardProfissionais()" class="input-icon">
+          <option value="">Todas as escolas</option>
+        </select>
+      </div>
+      <div id="dashboardProfContainer">
+        <p>Carregando...</p>
+      </div>
+      <div id="dashboardProfFiltroCargoWrapper" style="margin-bottom: 16px;">
+        <select id="dashboardProfFiltroCargo" onchange="carregarDashboardProfissionais()" class="input-icon">
+          <option value="">Todos os cargos</option>
+          <option value="PROFESSOR">Professor</option>
+          <option value="PEDAGOGO">Pedagogo</option>
+          <option value="TÉCNICO ADMINISTRATIVO">Técnico Administrativo</option>
+          <option value="AUXILIAR">Auxiliar</option>
+          <!-- Adicione outros cargos conforme necessário -->
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-salvar" onclick="exportarDashboardProfissionaisPDF()">
+          <i class="fas fa-file-pdf"></i> Exportar PDF
+        </button>
+        <button class="btn-cancelar" onclick="fecharDashboardProfissionais()">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DESEMPENHO DA ESCOLA -->
+<div id="modalDesempenho" class="modal-overlay" style="display:none;">
+  <div class="modal-card modal-card--grande" style="max-width: 480px;">
+    <div class="modal-header">
+      <h2><i class="fas fa-star"></i> Desempenho da Escola</h2>
+      <button class="close-btn" onclick="fecharModalDesempenho()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="modalDesempenhoBody">
+      <!-- Preenchido via JavaScript -->
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancelar" onclick="fecharModalDesempenho()">Fechar</button>
+    </div>
+  </div>
+</div>
+<!-- MODAL RANKING -->
+<div id="modalRanking" class="modal-overlay" style="display:none;">
+  <div class="modal-card modal-card--grande" style="max-width: 480px;">
+    <div class="modal-header">
+      <h2><i class="fas fa-trophy"></i> Ranking Regional</h2>
+      <button class="close-btn" onclick="fecharModalRanking()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="modalRankingBody">
+      <!-- Preenchido via JavaScript -->
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancelar" onclick="fecharModalRanking()">Fechar</button>
+    </div>
+  </div>
+</div>
+</body>
+<!-- DOCK INFERIOR MOBILE -->
+<div id="dockMobile" style="display:none;">
+  <div class="dock-item" onclick="abrirModalLegislacao()"><i class="fas fa-balance-scale"></i><span>Legislação</span></div>
+  <div class="dock-item" onclick="abrirModalMonitoramento()"><i class="fas fa-clipboard-list"></i><span>Monitoramento</span></div>
+  <div class="dock-item" onclick="abrirModalGeradorDocumentos()"><i class="fas fa-file-contract"></i><span>Parecer</span></div>
+  <div class="dock-item" onclick="abrirModalDocumentos()"><i class="fas fa-folder-open"></i><span>Documentos</span></div>
+  <div class="dock-item" id="dockToggleAlunos" onclick="toggleListaAlunosMobile()"><i class="fas fa-users"></i><span>Alunos</span></div>
+</div>
+    <!-- Efeito Parallax no Fundo do Login -->
+    <script>
+      (function() {
+        const loginEl = document.getElementById('login');
+        if (!loginEl) return;
+    
+        // Posições atuais e alvo (para suavizar o movimento)
+        let currentX = 0, currentY = 0;
+        let targetX = 0, targetY = 0;
+        
+        // Intensidade do efeito (ajuste conforme desejar)
+        const intensidade = 15; // quanto maior, mais o fundo se move
+    
+        // Escuta o movimento do mouse
+        document.addEventListener('mousemove', function(e) {
+          const centroX = window.innerWidth / 2;
+          const centroY = window.innerHeight / 2;
+          
+          // Calcula para onde o fundo deve ir (-1 a 1)
+          targetX = (e.clientX - centroX) / centroX * intensidade;
+          targetY = (e.clientY - centroY) / centroY * intensidade;
+        });
+    
+        // Função de animação contínua
+        function animar() {
+          // Suaviza: o valor atual se aproxima gradualmente do alvo
+          currentX += (targetX - currentX) * 0.05;
+          currentY += (targetY - currentY) * 0.05;
+          
+          // Aplica a posição do fundo
+          loginEl.style.backgroundPosition = `calc(50% + ${currentX}px) calc(50% + ${currentY}px)`;
+          
+          // Continua a animação
+          requestAnimationFrame(animar);
+        }
+    
+        // Inicia a animação
+        animar();
+      })();
+    </script>
+
+<script src="js/loader.js"></script>
+  <script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./service-worker.js?v=' + APP_VERSION)
+    .then(reg => {
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
+            if (typeof mostrarToast === 'function') {
+              mostrarToast('Nova versão disponível. Atualizando...', 'info', 2000);
+            }
+            setTimeout(() => window.location.reload(), 2000);
+          }
+        });
+      });
+    })
+    .catch(err => console.error('Erro no SW:', err));
+}
+</script>
+<!-- SISTEMA DE GRADE 11x6 COM PADRÃO XADREZ (33 escolas, 33 vazios) -->
+<script>
+  (function() {
+    // Lista oficial das 33 escolas (sem a Tutorial Teste)
+    const escolas = [
+      "CEEFMTI Afonso Cláudio", "CEEFMTI Elisa Paiva", "EE Ivana Casagrande Scabelo",
+      "EE Severino Paste", "EEEFM Alto Rio Possmoser", "EEEFM Álvaro Castelo",
+      "EEEFM Domingos Perim", "EEEFM Elvira Barros", "EEEFM Fazenda Camporês",
+      "EEEFM Fazenda Emílio Schroeder", "EEEFM Fioravante Caliman", "EEEFM Frederico Boldt",
+      "EEEFM Gisela Salloker Fayet", "EEEFM Graça Aranha", "EEEFM Joaquim Caetano de Paiva",
+      "EEEFM José Cupertino", "EEEFM José Giestas", "EEEFM José Roberto Christo",
+      "EEEFM Leogildo Severiano de Souza", "EEEFM Luiz Jouffroy", "EEEFM Maria de Abreu Alvim",
+      "EE Mário Bergamin", "EEEFM Marlene Brandão", "EEEFM Pedra Azul",
+      "EEEFM Ponto do Alto", "EEEFM Profª Aldy Soares Merçon Vargas", "EEEFM Prof Hermann Berger",
+      "EEEFM São Jorge", "EEEFM São Luís", "EEEFM Teófilo Paulino", "EEEM Francisco Guilherme",
+      "EEEM Mata fria", "EEEM Sobreiro"
+    ];
+
+    // Embaralhador (Fisher-Yates)
+    function shuffleArray(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    // Cria a estrutura fixa: 11 linhas, 6 colunas, preenchendo cheio/vazio conforme padrão de xadrez
+    function criarEstruturaXadrez(containerId) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = '';
+
+      const linhas = 11;
+      const colunas = 6;
+
+      for (let l = 0; l < linhas; l++) {
+        const linhaDiv = document.createElement('div');
+        linhaDiv.className = 'escola-linha';
+        
+        // Define se a linha começa com cheio na coluna 0 (índice par) ou na coluna 1 (ímpar)
+        const comecaCheio = (l % 2 === 0);
+        
+        for (let c = 0; c < colunas; c++) {
+          const celula = document.createElement('div');
+          celula.className = 'escola-grid-item';
+          // Célula cheia se (comecaCheio e coluna par) OU (!comecaCheio e coluna ímpar)
+          const isCheio = (comecaCheio && c % 2 === 0) || (!comecaCheio && c % 2 === 1);
+          if (!isCheio) {
+            celula.classList.add('empty');
+            celula.textContent = '';
+          } else {
+            celula.textContent = ''; // será preenchido depois
+          }
+          linhaDiv.appendChild(celula);
+        }
+        container.appendChild(linhaDiv);
+      }
+    }
+
+    function preencherXadrez(containerId, listaEscolas) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      
+      const celulas = container.querySelectorAll('.escola-grid-item');
+      const celulasCheias = [];
+      celulas.forEach(cel => {
+        if (!cel.classList.contains('empty')) {
+          celulasCheias.push(cel);
+        }
+      });
+      
+      const escolasEmbaralhadas = shuffleArray([...listaEscolas]);
+      
+      // Fade out
+      celulasCheias.forEach(cel => {
+        cel.style.opacity = '0';
+        cel.style.transform = 'scale(0.95)';
+      });
+      
+      // Espera a transição e troca os nomes
+      setTimeout(() => {
+        for (let i = 0; i < celulasCheias.length && i < escolasEmbaralhadas.length; i++) {
+          celulasCheias[i].textContent = escolasEmbaralhadas[i];
+        }
+        // Fade in
+        celulasCheias.forEach(cel => {
+          cel.style.opacity = '1';
+          cel.style.transform = 'scale(1)';
+        });
+      }, 1000); // tempo igual ao da transição CSS
+    }
+
+    // Inicialização para splash e login
+    function iniciarXadrez() {
+      const splashContainer = document.getElementById('splashEscolas');
+      const loginContainer = document.getElementById('loginParticles');
+      
+      if (splashContainer) {
+        criarEstruturaXadrez('splashEscolas');
+        preencherXadrez('splashEscolas', escolas);
+        setInterval(() => {
+          preencherXadrez('splashEscolas', escolas);
+        }, 3000);
+      }
+      if (loginContainer) {
+        criarEstruturaXadrez('loginParticles');
+        preencherXadrez('loginParticles', escolas);
+        setInterval(() => {
+          preencherXadrez('loginParticles', escolas);
+        }, 3000);
+      }
+    }
+
+    // Reconstruir ao redimensionar a janela (para recalcular tamanhos responsivos)
+    window.addEventListener('resize', function() {
+      const splashContainer = document.getElementById('splashEscolas');
+      const loginContainer = document.getElementById('loginParticles');
+      if (splashContainer) {
+        criarEstruturaXadrez('splashEscolas');
+        preencherXadrez('splashEscolas', escolas);
+      }
+      if (loginContainer) {
+        criarEstruturaXadrez('loginParticles');
+        preencherXadrez('loginParticles', escolas);
+      }
+    });
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', iniciarXadrez);
+    } else {
+      iniciarXadrez();
+    }
+  })();
+</script>
+
+</body>
+</html>
