@@ -110,6 +110,9 @@ function executarImportacaoProfissionais() {
 
   const reader = new FileReader();
   reader.onload = function(e) {
+    mostrarToast('A importação de profissionais por CSV ainda não foi migrada para o novo servidor.', 'warning');
+    return;
+    // (código antigo abaixo desativado)
     const base64 = e.target.result.split(',')[1];
     const dados = {
       acao: 'enviarCSVParaFilaProfissionais',

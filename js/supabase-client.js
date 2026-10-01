@@ -595,6 +595,75 @@ async function listarLegislacaoSb(u) {
   return u.searchParams.get('tipo') === 'legislacaoPorId' ? (itens.find(function (l) { return l.id === p('id'); }) || null) : itens;
 }
 
+// ------------------------------------------------------------
+// PROFISSIONAIS
+// ------------------------------------------------------------
+const PROF_COLUNAS = ["ID", "NOME", "DATA_NASCIMENTO", "FILIACAO_1", "FILIACAO_2", "UF_NASCIMENTO", "MUNICIPIO_NASCIMENTO", "INEP", "LOGRADOURO", "NUMERO", "COMPLEMENTO", "BAIRRO", "CIDADE", "UF", "CEP", "CPF", "CERTIDAO_NASC", "ESCOLARIDADE", "TIPO_ENSINO_MEDIO", "CURSO_SUPERIOR", "LICENCIATURA", "POS_GRADUACAO", "MATRICULA", "SITUACAO_LOTACAO", "CARGO", "DATA_ADMISSAO_LOTACAO", "DATA_TERMINO_CONTRATO", "REGIME", "CH_MENSAL", "DATA_DESLIGAMENTO_LOTACAO", "CH_LOTACAO", "CH_VINCULO", "LOCAL_TRABALHO", "SITUACAO_VINCULO", "DATA_ADMISSAO_VINCULO", "DATA_DESLIGAMENTO_VINCULO", "SEXO", "PAIS_ORIGEM", "RACA", "NACIONALIDADE", "POVO_INDIGENA", "LOCALIZACAO_DIFERENCIADA", "DEFICIENCIAS", "TRANSTORNO_GLOBAL", "ALTAS_HABILIDADES", "ANO_CONCLUSAO_FORMACAO_1", "ANO_CONCLUSAO_FORMACAO_2", "ANO_CONCLUSAO_FORMACAO_3", "CURSO_FORMACAO_1", "CURSO_FORMACAO_2", "CURSO_FORMACAO_3", "INSTITUICAO_FORMACAO_1", "INSTITUICAO_FORMACAO_2", "INSTITUICAO_FORMACAO_3", "AREAS_CONHECIMENTO", "ZONA_RESIDENCIA", "OUTROS_CURSOS", "EMAIL", "TURMAS", "DISCIPLINAS", "TIPO_POS_1", "TIPO_POS_2", "TIPO_POS_3", "TIPO_POS_4", "TIPO_POS_5", "TIPO_POS_6", "AREA_POS_1", "AREA_POS_2", "AREA_POS_3", "AREA_POS_4", "AREA_POS_5", "AREA_POS_6", "ANO_CONCLUSAO_POS_1", "ANO_CONCLUSAO_POS_2", "ANO_CONCLUSAO_POS_3", "ANO_CONCLUSAO_POS_4", "ANO_CONCLUSAO_POS_5", "ANO_CONCLUSAO_POS_6", "NOME_POS_1", "NOME_POS_2", "NOME_POS_3", "NOME_POS_4", "NOME_POS_5", "NOME_POS_6", "RG"];
+const PROF_DATAS = ["DATA_NASCIMENTO", "DATA_ADMISSAO_LOTACAO", "DATA_TERMINO_CONTRATO", "DATA_DESLIGAMENTO_LOTACAO", "DATA_ADMISSAO_VINCULO", "DATA_DESLIGAMENTO_VINCULO"];
+
+function profissionalParaTela(p) {
+  const o = { ID: p.codigo, _ESCOLA: p.escola };
+  PROF_COLUNAS.forEach(function (c) {
+    if (c === 'ID') return;
+    const v = p[c.toLowerCase()];
+    o[c] = (v === null || v === undefined) ? '' : String(v);
+  });
+  return o;
+}
+
+async function listarProfissionaisSb(u) {
+  const escola = u.searchParams.get('escola') || '';
+  const todos = [];
+  for (let de = 0; ; de += 1000) {
+    let q = sb.from('profissionais_v').select('*');
+    if (escola) q = q.eq('escola', escola);
+    const { data, error } = await q.order('escola').order('nome').order('codigo').range(de, de + 999);
+    if (error) throw error;
+    data.forEach(function (p) { todos.push(profissionalParaTela(p)); });
+    if (data.length < 1000) break;
+  }
+  return todos;
+}
+
+async function idProfissionalSb(escola, codigo) {
+  const { data, error } = await sb.from('profissionais').select('id').eq('escola', escola).eq('codigo', String(codigo)).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('Profissional não encontrado.');
+  return data.id;
+}
+
+async function listarDocumentosProfissionalSb(u) {
+  const escola = u.searchParams.get('escola'), codigo = u.searchParams.get('idProfissional');
+  if (!escola || !codigo) return [];
+  const profId = await idProfissionalSb(escola, codigo);
+  const { data, error } = await sb.from('documentos_profissionais').select('*').eq('profissional_id', profId).order('data_upload');
+  if (error) throw error;
+  return Promise.all(data.map(async function (d) {
+    let viewUrl = null, downloadUrl = null;
+    if (d.arquivo_path) {
+      const v = await sb.storage.from('profissionais-docs').createSignedUrl(d.arquivo_path, 3600);
+      const dl = await sb.storage.from('profissionais-docs').createSignedUrl(d.arquivo_path, 3600, { download: d.nome_arquivo || true });
+      viewUrl = v.data ? v.data.signedUrl : null;
+      downloadUrl = dl.data ? dl.data.signedUrl : null;
+    } else if (d.arquivo_drive_id) {
+      viewUrl = 'https://drive.google.com/file/d/' + d.arquivo_drive_id + '/view';
+      downloadUrl = 'https://drive.google.com/uc?export=download&id=' + d.arquivo_drive_id;
+    }
+    return { idProfissional: codigo, escola: d.escola, tipoDocumento: d.tipo_documento, fileName: d.nome_arquivo || '',
+      fileId: d.id, dataUpload: d.data_upload, usuarioUpload: d.usuario_upload || '', observacoes: d.observacoes || '',
+      viewUrl: viewUrl, downloadUrl: downloadUrl };
+  }));
+}
+
+async function dashboardProfissionaisSb(u) {
+  const { data, error } = await sb.rpc('dashboard_profissionais', { p_escola: u.searchParams.get('escola') || null });
+  if (error) throw error;
+  return data.map(function (r) {
+    return { escola: r.escola, total: Number(r.total), ativos: Number(r.ativos), temporarios: Number(r.temporarios),
+      efetivos: Number(r.efetivos), comPendencia: Number(r.com_pendencia) };
+  });
+}
+
 const _jsonpLegado = jsonp;
 const ROTAS_JSONP_SB = {
   verificarConsentimento: function () { return consentimentoSb(); },
@@ -613,6 +682,9 @@ const ROTAS_JSONP_SB = {
   listarDadosEscolas: function () { return listarDadosEscolasSb(); },
   listarOrganizacoesCurriculares: function (u) { return listarOrgsSb(u.searchParams.get('escola') || ''); },
   atos: function (u) { return listarAtosSb(u); },
+  listarProfissionais: function (u) { return listarProfissionaisSb(u); },
+  listarDocumentosProfissional: function (u) { return listarDocumentosProfissionalSb(u); },
+  dashboardProfissionais: function (u) { return dashboardProfissionaisSb(u); },
   legislacao: function (u) { return listarLegislacaoSb(u); },
   legislacaoPorId: function (u) { return listarLegislacaoSb(u); }
 };
@@ -1000,6 +1072,43 @@ Object.assign(ACAO_ALUNO_SB, {
   }
 });
 
+Object.assign(ACAO_ALUNO_SB, {
+  async atualizarProfissional(d) {
+    if (!d.escola || !d.id) throw new Error('Dados insuficientes.');
+    const c = {};
+    PROF_COLUNAS.forEach(function (col) {
+      if (col === 'ID' || d[col] === undefined) return;
+      c[col.toLowerCase()] = PROF_DATAS.indexOf(col) !== -1 ? paraDataIso(d[col]) : txtOuNulo(d[col]);
+    });
+    await exigirLinhasAfetadas(sb.from('profissionais').update(c).eq('escola', d.escola).eq('codigo', String(d.id)).select('id'));
+  },
+
+  async uploadDocumentoProfissional(d) {
+    if (!d.idProfissional || !d.escola || !d.tipoDocumento || !d.fileBase64 || !d.fileName) throw new Error('Dados insuficientes.');
+    const profId = await idProfissionalSb(d.escola, d.idProfissional);
+    const bin = atob(d.fileBase64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const seguro = d.fileName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9._-]/g, '_');
+    const caminho = profId + '/' + Date.now() + '_' + seguro;
+    const up = await sb.storage.from('profissionais-docs').upload(caminho, new Blob([bytes], { type: d.mimeType || 'application/octet-stream' }),
+      { contentType: d.mimeType || 'application/octet-stream', upsert: false });
+    if (up.error) throw up.error;
+    const { error } = await sb.from('documentos_profissionais').insert({
+      profissional_id: profId, escola: d.escola, tipo_documento: d.tipoDocumento, nome_arquivo: d.fileName,
+      arquivo_path: caminho, observacoes: txtOuNulo(d.observacoes)
+    });
+    if (error) { await sb.storage.from('profissionais-docs').remove([caminho]); throw error; }
+  },
+
+  async excluirDocumentoProfissional(d) {
+    const { data, error } = await sb.from('documentos_profissionais').delete().eq('id', d.fileId).select('arquivo_path');
+    if (error) throw error;
+    if (!data || !data.length) throw new Error('Documento não encontrado ou sem permissão.');
+    if (data[0].arquivo_path) await sb.storage.from('profissionais-docs').remove([data[0].arquivo_path]);
+  }
+});
+
 // Ações ainda não migradas: bloqueadas para NÃO gravar na planilha por engano
 // enquanto a leitura já vem do Supabase (as duas bases ficariam diferentes).
 const ACOES_ALUNOS_PENDENTES = {
@@ -1015,6 +1124,7 @@ window.postSemResposta = function (dados, msgSucesso, callback, aoFalhar) {
     try { ImportProgress.limpar(); ImportProgress.esconder(); } catch (_) {}
     if (typeof esconderLoading === 'function') esconderLoading();
     mostrarToast(ACOES_ALUNOS_PENDENTES[dados.acao], 'warning');
+    if (aoFalhar) aoFalhar(new Error('pendente'));
     return;
   }
   if (dados && ACAO_ALUNO_SB[dados.acao]) {
