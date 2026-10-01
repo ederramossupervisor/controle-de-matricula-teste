@@ -727,6 +727,130 @@ async function listarLogAcoesSb(u) {
   });
 }
 
+// ------------------------------------------------------------
+// PROCESSOS, DOCUMENTOS E MODELOS
+// ------------------------------------------------------------
+const TIPOS_DOCUMENTO_FIXOS = [
+  "Certificado", "Histórico", "Diploma", "Declaração de Transferência",
+  "Declaração de Escolaridade", "Declaração de Conclusão", "Ficha de Matrícula",
+  "Termo de Compromisso", "Termo de Uso de Imagem", "Atestado Médico",
+  "Atas de Conselho de Classe", "Listas de Alunos Concluintes", "Plano de Curso (Técnico)"
+];
+const TIPOS_PROCESSO_FIXOS = [
+  "Cuidador", "Regularização AEE", "Calendário", "Livro de ponto", "Regimento Escolar",
+  "PPP", "PDI", "PAI", "Credenciamento", "Renovação de credenciamento",
+  "Aprovação de curso/etapa/modalidade", "Renovação de aprovação de curso/etapa/modalidade",
+  "Regularização de Vida Escolar", "Manifestação GENPRO", "Ata Especial de RVE",
+  "Ata de Classificação/Reclassificação/Avanço Escolar", "Atas de Conselho de Classe",
+  "Listas de Alunos Concluintes", "Plano de Curso (Técnico)", "Plano de Intervenção PFA"
+];
+
+const _slugCache = {};
+async function slugEscolaSb(nome) {
+  if (_slugCache[nome]) return _slugCache[nome];
+  const { data, error } = await sb.from('escolas').select('slug').eq('nome', nome).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('Escola não encontrada ou sem permissão.');
+  _slugCache[nome] = data.slug;
+  return data.slug;
+}
+
+function nomeSeguroArquivo(nome) {
+  return String(nome || 'arquivo').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9._-]/g, '_');
+}
+
+function base64ParaBlob(b64, tipo) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: tipo || 'application/octet-stream' });
+}
+
+// links temporários (1 h) para arquivos do Storage, em lote; arquivos antigos abrem pelo Drive
+async function linksArquivosSb(bucket, itens) {
+  const caminhos = itens.filter(function (i) { return i.arquivo_path; }).map(function (i) { return i.arquivo_path; });
+  const ver = {}, baixar = {};
+  if (caminhos.length) {
+    const a = await sb.storage.from(bucket).createSignedUrls(caminhos, 3600);
+    (a.data || []).forEach(function (x) { if (x.signedUrl) ver[x.path] = x.signedUrl; });
+    const b = await sb.storage.from(bucket).createSignedUrls(caminhos, 3600, { download: true });
+    (b.data || []).forEach(function (x) { if (x.signedUrl) baixar[x.path] = x.signedUrl; });
+  }
+  return itens.map(function (i) {
+    if (i.arquivo_path) return { viewUrl: ver[i.arquivo_path] || null, downloadUrl: baixar[i.arquivo_path] || null };
+    if (i.arquivo_drive_id) return {
+      viewUrl: 'https://drive.google.com/file/d/' + i.arquivo_drive_id + '/view',
+      downloadUrl: 'https://drive.google.com/uc?export=download&id=' + i.arquivo_drive_id };
+    return { viewUrl: null, downloadUrl: null };
+  });
+}
+
+async function listarProcessosSb(u) {
+  let q = sb.from('processos').select('*');
+  const p = function (k) { return u.searchParams.get(k); };
+  if (p('filtroTipo')) q = q.eq('tipo', p('filtroTipo'));
+  if (p('filtroEscola')) q = q.eq('escola', p('filtroEscola'));
+  if (p('filtroCodigo')) q = q.ilike('codigo', '%' + p('filtroCodigo').replace(/[%_\\]/g, '\\$&') + '%');
+  if (p('filtroAluno')) q = q.ilike('aluno', '%' + p('filtroAluno').replace(/[%_\\]/g, '\\$&') + '%');
+  const { data, error } = await q.order('criado_em').order('codigo');
+  if (error) throw error;
+  return data.map(function (x) {
+    return { id: x.id, codigo: x.codigo, tipo: x.tipo, escola: x.escola, aluno: x.aluno || '', categoria: x.categoria || '',
+      subcategoria: x.subcategoria || '', observacoes: x.observacoes || '', link: x.link || '' };
+  });
+}
+
+async function listarDocumentosSb(u) {
+  let q = sb.from('documentos').select('*');
+  const p = function (k) { return u.searchParams.get(k); };
+  if (p('filtroEscola')) q = q.eq('escola', p('filtroEscola'));
+  if (p('filtroTipo')) q = q.eq('tipo', p('filtroTipo'));
+  if (p('filtroNome')) q = q.ilike('nome_aluno', '%' + p('filtroNome').replace(/[%_\\]/g, '\\$&') + '%');
+  const { data, error } = await q.order('data_upload', { ascending: false }).limit(500);
+  if (error) throw error;
+  const links = await linksArquivosSb('documentos', data);
+  return data.map(function (d, i) {
+    return { escola: d.escola, tipo: d.tipo, nomeAluno: d.nome_aluno || '', fileName: d.nome_arquivo || '', fileId: d.id,
+      dataUpload: d.data_upload, usuario: d.usuario || '', downloadUrl: links[i].downloadUrl, viewUrl: links[i].viewUrl };
+  });
+}
+
+async function tiposPersonalizadosSb(tabela, escola) {
+  if (!escola) return [];
+  const { data, error } = await sb.from(tabela).select('tipo').eq('escola', escola).order('tipo');
+  if (error) throw error;
+  return data.map(function (x) { return x.tipo; });
+}
+
+async function listarModelosSb() {
+  const p = await carregarPerfilSb();
+  const { data, error } = await sb.from('modelos_oficiais').select('*').order('nome');
+  if (error) throw error;
+  const visiveis = data.filter(function (m) { return p.is_admin || m.arquivo_path || m.arquivo_drive_id; });
+  const links = await linksArquivosSb('modelos', visiveis);
+  const lista = visiveis.map(function (m, i) {
+    const tem = !!(m.arquivo_path || m.arquivo_drive_id);
+    return { nome: m.nome, fileId: m.arquivo_drive_id || m.arquivo_path || null, fileName: m.arquivo_nome || null,
+      downloadUrl: tem ? links[i].downloadUrl : null, viewUrl: tem ? links[i].viewUrl : null, temArquivo: tem };
+  });
+  lista.sort(function (a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
+  return lista;
+}
+
+async function listarModelosEscolaSb() {
+  const p = await carregarPerfilSb();
+  const oficiais = await listarModelosSb();
+  if (!p.escola) return oficiais;
+  const { data, error } = await sb.from('modelos_escolas').select('*').eq('escola', p.escola).order('nome_modelo');
+  if (error) throw error;
+  const links = await linksArquivosSb('modelos', data);
+  const proprios = data.map(function (m, i) {
+    return { nome: m.nome_modelo, fileId: m.arquivo_drive_id || m.arquivo_path, fileName: m.arquivo_nome, dataUpload: m.data_upload,
+      usuario: m.usuario, temArquivo: true, downloadUrl: links[i].downloadUrl, viewUrl: links[i].viewUrl, isPersonalizado: true };
+  });
+  return oficiais.concat(proprios);
+}
+
 const _jsonpLegado = jsonp;
 const ROTAS_JSONP_SB = {
   verificarConsentimento: function () { return consentimentoSb(); },
@@ -745,6 +869,19 @@ const ROTAS_JSONP_SB = {
   listarDadosEscolas: function () { return listarDadosEscolasSb(); },
   listarOrganizacoesCurriculares: function (u) { return listarOrgsSb(u.searchParams.get('escola') || ''); },
   atos: function (u) { return listarAtosSb(u); },
+  processos: function (u) { return listarProcessosSb(u); },
+  documentos: function (u) { return listarDocumentosSb(u); },
+  listarTiposProcesso: async function (u) {
+    const p = await carregarPerfilSb();
+    const extra = await tiposPersonalizadosSb('processos_tipos', u.searchParams.get('escola') || p.escola);
+    return Array.from(new Set(TIPOS_PROCESSO_FIXOS.concat(extra)));
+  },
+  listarTiposDocumento: async function () {
+    const p = await carregarPerfilSb();
+    return TIPOS_DOCUMENTO_FIXOS.concat(await tiposPersonalizadosSb('documentos_tipos', p.escola));
+  },
+  modelos: function () { return listarModelosSb(); },
+  listarModelosEscola: function () { return listarModelosEscolaSb(); },
   dashboard: function (u) { return rpcSb('dashboard_pendencias', { p_escola: u.searchParams.get('escola') || null }); },
   desempenho: function (u) { return rpcSb('desempenho', { p_escola: u.searchParams.get('escola') || null }); },
   rankingCache: function () { return rpcSb('ranking_escolas'); },
@@ -1185,6 +1322,87 @@ Object.assign(ACAO_ALUNO_SB, {
     if (!escola && p && !p.is_admin && !(p.perfis || []).includes('SUPERVISOR')) escola = p.escola || '';
     const { error } = await sb.from('log_acoes').insert({ acao: d.acaoLog, detalhes: d.detalhes || null, escola: escola || null });
     if (error) throw error;
+  }
+});
+
+Object.assign(ACAO_ALUNO_SB, {
+  async cadastrarProcesso(d) {
+    const p = await carregarPerfilSb();
+    const podeEscolher = p.is_admin || (p.perfis || []).includes('SUPERVISOR');
+    const escola = podeEscolher ? d.escola : p.escola;
+    if (!escola || !d.tipo || !txtOuNulo(d.codigo)) throw new Error('Escola, tipo e código são obrigatórios.');
+    const { error } = await sb.from('processos').insert({
+      escola: escola, tipo: d.tipo, codigo: String(d.codigo).trim(), aluno: txtOuNulo(d.aluno), categoria: txtOuNulo(d.categoria),
+      subcategoria: txtOuNulo(d.subcategoria), observacoes: txtOuNulo(d.observacoes), link: txtOuNulo(d.link)
+    });
+    if (error) { if (error.code === '23505') throw new Error('Código já cadastrado.'); throw error; }
+  },
+
+  async cadastrarTipoProcesso(d) {
+    const p = await carregarPerfilSb();
+    const escola = (p.is_admin || (p.perfis || []).includes('SUPERVISOR')) ? (d.escola || '') : p.escola;
+    if (!escola) throw new Error('Selecione a escola antes de cadastrar um novo tipo.');
+    const tipo = (d.tipo || '').trim();
+    if (!tipo) throw new Error('Nome do tipo é obrigatório.');
+    const { error } = await sb.from('processos_tipos').upsert({ escola: escola, tipo: tipo }, { onConflict: 'escola,tipo', ignoreDuplicates: true });
+    if (error) throw error;
+  },
+
+  async cadastrarTipoDocumento(d) {
+    const p = await carregarPerfilSb();
+    if (!p.escola) throw new Error('Seu usuário não está vinculado a uma escola.');
+    const tipo = (d.tipo || '').trim();
+    if (!tipo) throw new Error('Nome do tipo é obrigatório.');
+    const { error } = await sb.from('documentos_tipos').upsert({ escola: p.escola, tipo: tipo }, { onConflict: 'escola,tipo', ignoreDuplicates: true });
+    if (error) throw error;
+  },
+
+  async uploadDocumento(d) {
+    const p = await carregarPerfilSb();
+    const escola = (p.is_admin || (p.perfis || []).includes('SUPERVISOR')) ? d.escola : p.escola;
+    if (!escola || !d.tipo || !d.fileBase64 || !d.fileName) throw new Error('Dados insuficientes.');
+    const slug = await slugEscolaSb(escola);
+    const ext = d.fileName.indexOf('.') >= 0 ? d.fileName.split('.').pop() : 'bin';
+    const prefixo = ['Certificado', 'Histórico', 'Diploma'].indexOf(d.tipo) >= 0 ? d.tipo : 'Documento';
+    const nomeFinal = prefixo + '_' + String(d.nomeAluno || '').replace(/\s+/g, '_') + '_' + escola.replace(/\s+/g, '_') + '.' + ext;
+    const caminho = slug + '/' + Date.now() + '_' + nomeSeguroArquivo(d.fileName);
+    const up = await sb.storage.from('documentos').upload(caminho, base64ParaBlob(d.fileBase64, d.mimeType), { contentType: d.mimeType || 'application/octet-stream', upsert: false });
+    if (up.error) throw up.error;
+    const { error } = await sb.from('documentos').insert({
+      escola: escola, tipo: d.tipo, nome_aluno: txtOuNulo(d.nomeAluno), nome_arquivo: nomeFinal, arquivo_path: caminho
+    });
+    if (error) { await sb.storage.from('documentos').remove([caminho]); throw error; }
+  },
+
+  async uploadModeloEscola(d) {
+    const p = await carregarPerfilSb();
+    if (!p.escola) throw new Error('Seu usuário não está vinculado a uma escola.');
+    if (!txtOuNulo(d.nomeModelo) || !d.fileBase64 || !d.fileName) throw new Error('Nome e arquivo são obrigatórios.');
+    const slug = await slugEscolaSb(p.escola);
+    const caminho = slug + '/' + Date.now() + '_' + nomeSeguroArquivo(d.fileName);
+    const up = await sb.storage.from('modelos').upload(caminho, base64ParaBlob(d.fileBase64, d.mimeType), { contentType: d.mimeType || 'application/octet-stream', upsert: false });
+    if (up.error) throw up.error;
+    const { error } = await sb.from('modelos_escolas').insert({
+      escola: p.escola, nome_modelo: d.nomeModelo.trim(), arquivo_path: caminho, arquivo_nome: d.fileName
+    });
+    if (error) { await sb.storage.from('modelos').remove([caminho]); throw error; }
+  },
+
+  async uploadModelo(d) {
+    const p = await carregarPerfilSb();
+    if (!p.is_admin) throw new Error('Apenas o Administrador pode gerenciar modelos.');
+    if (!d.modeloNome || !d.fileBase64 || !d.fileName) throw new Error('Arquivo não fornecido.');
+    const atual = await sb.from('modelos_oficiais').select('arquivo_path').eq('nome', d.modeloNome).maybeSingle();
+    if (atual.error) throw atual.error;
+    if (!atual.data) throw new Error('Tipo de modelo inválido.');
+    const caminho = 'oficiais/' + Date.now() + '_' + nomeSeguroArquivo(d.fileName);
+    const up = await sb.storage.from('modelos').upload(caminho, base64ParaBlob(d.fileBase64, d.mimeType), { contentType: d.mimeType || 'application/octet-stream', upsert: false });
+    if (up.error) throw up.error;
+    const { error } = await sb.from('modelos_oficiais').update({
+      arquivo_path: caminho, arquivo_drive_id: null, arquivo_nome: d.fileName, atualizado_em: new Date().toISOString(), usuario: p.email
+    }).eq('nome', d.modeloNome);
+    if (error) { await sb.storage.from('modelos').remove([caminho]); throw error; }
+    if (atual.data.arquivo_path) await sb.storage.from('modelos').remove([atual.data.arquivo_path]);
   }
 });
 

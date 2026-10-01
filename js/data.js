@@ -728,15 +728,7 @@ async function fazerUploadModelo() {
       fileBase64: base64
     };
     
-    // Envia sem esperar resposta JSON (no-cors)
-    const response = await fetch(API_URL, {
-      method: "POST",
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(dados)
-    });
-    
-    mostrarToast("Modelo enviado com sucesso! Atualize a lista.", "success");
+    await new Promise((resolve, reject) => postSemResposta(dados, "Modelo enviado com sucesso!", resolve, reject));
     fileInput.value = "";
     select.value = "";
     mostrarAbaListarModelos();
