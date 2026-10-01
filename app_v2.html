@@ -109,6 +109,28 @@
     </div>
   </div>
 
+  <!-- ⚡ ATUALIZAR A PÁGINA SEM SPLASH
+       Quando a página é recarregada (F5 / puxar para atualizar) e já existe
+       sessão salva, pula a splash e mostra só o spinner de carregamento.
+       A primeira abertura do app/aba continua mostrando a splash normalmente.
+       O login também é escondido aqui porque ele só fica "invisível" por
+       estar coberto pela splash. -->
+  <script>
+    (function () {
+      try {
+        var nav = performance.getEntriesByType('navigation')[0];
+        var recarregou = nav ? nav.type === 'reload'
+          : (performance.navigation && performance.navigation.type === 1);
+        if (recarregou && localStorage.getItem('emailUsuario')) {
+          window._pularSplash = true;
+          document.getElementById('splash').style.display = 'none';
+          document.getElementById('login').style.display = 'none';
+          document.getElementById('loading').style.display = 'flex';
+        }
+      } catch (e) { /* sem problema: cai no comportamento normal (com splash) */ }
+    })();
+  </script>
+
   <!-- 📋 APP -->
   <div id="app" style="display:none;">
     <!-- ➕ MODAL DE CADASTRO DE ALUNO -->
