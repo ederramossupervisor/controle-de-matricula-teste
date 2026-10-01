@@ -482,6 +482,119 @@ async function garantirTurmasSb(escola, turmas) {
 }
 
 // As telas pedem turmas via jsonp(...tipo=turmas...). Aqui desviamos esse pedido para o Supabase.
+// ------------------------------------------------------------
+// COMUNICADOS, AGENDA, DADOS DA ESCOLA, ORG. CURRICULARES, ATOS, LEGISLAÇÃO
+// ------------------------------------------------------------
+function isoOuVazio(v) { return v || ''; }
+
+async function listarComunicadosSb(escola) {
+  const agora = new Date().toISOString();
+  let q = sb.from('comunicados').select('*').or('data_expiracao.is.null,data_expiracao.gt.' + agora);
+  if (escola) q = q.or('escola.eq."' + escola.replace(/"/g, '') + '",escola.eq.TODAS');
+  const { data, error } = await q.order('fixado', { ascending: false }).order('data_inicio', { ascending: false });
+  if (error) throw error;
+  return data.map(function (c) {
+    return { id: c.id, escola: c.escola, titulo: c.titulo, texto: c.texto, prioridade: c.prioridade, fixado: c.fixado === true,
+      dataInicio: c.data_inicio, dataExpiracao: isoOuVazio(c.data_expiracao), criador: c.criador };
+  });
+}
+
+async function listarAgendaSb() {
+  const { data, error } = await sb.from('agenda').select('*').order('data_hora');
+  if (error) throw error;
+  return data.map(function (e) {
+    return { id: e.id, criador: e.criador, tipo: e.tipo, escola: e.escola || '', dataHora: e.data_hora,
+      descricao: e.descricao || '', lembrete: e.lembrete_enviado === true };
+  });
+}
+
+function dadosEscolaParaTela(e) {
+  return {
+    ESCOLA: e.nome, LOGRADOURO: e.logradouro || '', NUMERO: e.numero || '', BAIRRO: e.bairro || '',
+    CIDADE: e.cidade || '', UF: e.uf || '', CEP: e.cep || '', EMAIL: e.email || '', TELEFONE: e.telefone || '',
+    ATO_CRIACAO: e.ato_criacao || '', PUBLICACAO_CRIACAO: dataParaTela(e.publicacao_criacao),
+    ATO_APROVACAO: e.ato_aprovacao || '', PUBLICACAO_APROVACAO: dataParaTela(e.publicacao_aprovacao),
+    ORGANIZACAO_CURRICULAR: e.organizacao_curricular || ''
+  };
+}
+
+async function obterDadosEscolaSb(escola) {
+  const { data, error } = await sb.from('escolas').select('*').eq('nome', escola).maybeSingle();
+  if (error) throw error;
+  return data ? dadosEscolaParaTela(data) : {};
+}
+
+async function listarDadosEscolasSb() {
+  const { data, error } = await sb.from('escolas').select('*').order('nome');
+  if (error) throw error;
+  return data.map(dadosEscolaParaTela);
+}
+
+async function listarOrgsSb(escola) {
+  const { data, error } = await sb.from('org_curriculares').select('*').eq('escola', escola).order('codigo');
+  if (error) throw error;
+  return data.map(function (o) { return { codigo: o.codigo, nome: o.nome, etapaModalidade: o.etapa_modalidade, tipo: o.tipo }; });
+}
+
+function atoParaTela(a) {
+  return {
+    id: a.id, escola: a.escola, tipoAto: a.tipo_ato, cursoEtapa: a.curso_etapa || '', numeroAto: a.numero_ato || '',
+    dataPublicacao: dataParaTela(a.data_publicacao), dataHomologacao: dataParaTela(a.data_homologacao),
+    validadeAnos: a.validade_anos, dataVencimento: dataParaTela(a.data_vencimento), status: a.status,
+    arquivoId: a.arquivo_drive_id || '', observacoes: a.observacoes || '', usuarioCadastro: a.usuario_cadastro || '',
+    dataCadastro: a.data_cadastro, fundamentacao: a.fundamentacao_legal || '', cursoTecnico: a.curso_tecnico || ''
+  };
+}
+
+async function listarAtosSb(u) {
+  let q = sb.from('atos_v').select('*');
+  const escola = u.searchParams.get('filtroEscola'), tipo = u.searchParams.get('filtroTipoAto'), status = u.searchParams.get('filtroStatus');
+  const etapa = u.searchParams.get('cursoEtapa'), tecnico = u.searchParams.get('cursoTecnico');
+  if (escola) q = q.eq('escola', escola);
+  if (tipo) q = q.eq('tipo_ato', tipo);
+  if (status) q = q.eq('status', status);
+  if (etapa) q = q.eq('curso_etapa', etapa);
+  if (tecnico) q = q.eq('curso_tecnico', tecnico);
+  const { data, error } = await q.order('escola').order('data_publicacao', { ascending: false });
+  if (error) throw error;
+  return data.map(atoParaTela);
+}
+
+async function listarLegislacaoSb(u) {
+  const [leg, vin] = await Promise.all([
+    sb.from('legislacao').select('*'),
+    sb.from('legislacao_vinculos').select('origem, destino, tipo_vinculo')
+  ]);
+  if (leg.error) throw leg.error;
+  if (vin.error) throw vin.error;
+  const porId = {};
+  leg.data.forEach(function (l) { porId[l.id] = l; });
+  let itens = leg.data.map(function (l) {
+    const meus = vin.data.filter(function (v) { return v.origem === l.id; });
+    const tipoVinculoObj = {};
+    meus.forEach(function (v) { tipoVinculoObj[v.destino] = v.tipo_vinculo; });
+    return {
+      id: l.id, tipo: l.tipo, numero: l.numero, ano: l.ano, assunto: l.assunto || '', arquivoId: l.arquivo_drive_id || '',
+      vinculosIds: meus.map(function (v) { return v.destino; }), tipoVinculoObj: tipoVinculoObj,
+      dataPublicacao: l.data_publicacao ? dataParaTela(l.data_publicacao) : '', observacoes: l.observacoes || '',
+      cadastradoPor: l.cadastrado_por || '', dataCadastro: l.data_cadastro, palavrasChave: l.palavras_chave || '',
+      vinculosDetalhes: meus.map(function (v) {
+        const d = porId[v.destino];
+        return d ? { id: d.id, tipo: d.tipo, numero: d.numero, ano: d.ano, assunto: d.assunto || '', tipoVinculo: v.tipo_vinculo } : null;
+      }).filter(Boolean)
+    };
+  });
+  const tem = function (campo, termo) { return String(campo || '').toLowerCase().includes(String(termo).toLowerCase()); };
+  const p = function (k) { return u.searchParams.get(k); };
+  if (p('filtroTipo')) itens = itens.filter(function (l) { return tem(l.tipo, p('filtroTipo')); });
+  if (p('filtroNumero')) itens = itens.filter(function (l) { return tem(l.numero, p('filtroNumero')); });
+  if (p('filtroAno')) itens = itens.filter(function (l) { return String(l.ano) === String(p('filtroAno')); });
+  if (p('filtroAssunto')) itens = itens.filter(function (l) { return tem(l.assunto, p('filtroAssunto')); });
+  if (p('filtroPalavrasChave')) itens = itens.filter(function (l) { return tem(l.palavrasChave, p('filtroPalavrasChave')); });
+  itens.sort(function (a, b) { return String(b.dataPublicacao).localeCompare(String(a.dataPublicacao)); });
+  return u.searchParams.get('tipo') === 'legislacaoPorId' ? (itens.find(function (l) { return l.id === p('id'); }) || null) : itens;
+}
+
 const _jsonpLegado = jsonp;
 const ROTAS_JSONP_SB = {
   verificarConsentimento: function () { return consentimentoSb(); },
@@ -493,7 +606,15 @@ const ROTAS_JSONP_SB = {
   obterTermoResp: function () { return Promise.resolve({ url: '' }); },
   obterDeclEdEspecial: function () { return Promise.resolve({ url: '' }); },
   fotoAluno: function () { return Promise.resolve({ url: '' }); },
-  turmas: function (u) { return listarTurmasSb(u.searchParams.get('escola') || ''); }
+  turmas: function (u) { return listarTurmasSb(u.searchParams.get('escola') || ''); },
+  comunicados: function (u) { return listarComunicadosSb(u.searchParams.get('escola') || ''); },
+  agenda: function () { return listarAgendaSb(); },
+  obterDadosEscola: function (u) { return obterDadosEscolaSb(u.searchParams.get('escola') || ''); },
+  listarDadosEscolas: function () { return listarDadosEscolasSb(); },
+  listarOrganizacoesCurriculares: function (u) { return listarOrgsSb(u.searchParams.get('escola') || ''); },
+  atos: function (u) { return listarAtosSb(u); },
+  legislacao: function (u) { return listarLegislacaoSb(u); },
+  legislacaoPorId: function (u) { return listarLegislacaoSb(u); }
 };
 window.jsonp = function (url, callback, onError) {
   try {
@@ -758,6 +879,125 @@ Object.assign(ACAO_ALUNO_SB, {
   async cadastrarUsuario(d) { mostrarSenhaTemporaria(d.email, await chamarAdminUsuarios(d)); },
   async editarUsuario(d) { await chamarAdminUsuarios(d); },
   async aprovarTermo(d) { await chamarAdminUsuarios(d); }
+});
+
+const ARQUIVO_PENDENTE = 'O envio de arquivos (PDF) deste cadastro ainda não foi migrado para o novo servidor. Salve sem anexar arquivo.';
+
+function dataHoraIso(v) {
+  const d = new Date(v);
+  if (isNaN(d.getTime())) throw new Error('Data/hora inválida.');
+  return d.toISOString();
+}
+
+async function vinculosLegislacaoSb(origem, vinculos) {
+  const { error: e1 } = await sb.from('legislacao_vinculos').delete().eq('origem', origem);
+  if (e1) throw e1;
+  const linhas = (vinculos || []).filter(function (v) { return v.idDestino && v.tipoVinculo && v.idDestino !== origem; })
+    .map(function (v) { return { origem: origem, destino: v.idDestino, tipo_vinculo: v.tipoVinculo }; });
+  if (linhas.length) {
+    const { error } = await sb.from('legislacao_vinculos').upsert(linhas, { onConflict: 'origem,destino' });
+    if (error) throw error;
+  }
+}
+
+Object.assign(ACAO_ALUNO_SB, {
+  async salvarComunicado(d) {
+    const p = await carregarPerfilSb();
+    const escola = (p.is_admin || (p.perfis || []).includes('SUPERVISOR')) ? (d.escola || '') : p.escola;
+    if (!escola || !d.titulo || !d.texto) throw new Error('Escola, título e texto são obrigatórios.');
+    const { error } = await sb.from('comunicados').insert({
+      escola: escola, titulo: d.titulo, texto: d.texto, prioridade: d.prioridade || 'informativo',
+      fixado: d.fixado === true,
+      data_expiracao: d.dataExpiracao ? new Date(d.dataExpiracao + 'T23:59:59-03:00').toISOString() : null
+    });
+    if (error) throw error;
+  },
+  async excluirComunicado(d) {
+    await exigirLinhasAfetadas(sb.from('comunicados').delete().eq('id', d.id).select('id'));
+  },
+
+  async criarEventoAgenda(d) {
+    if (!d.tipo || !d.dataHora) throw new Error('Preencha todos os campos obrigatórios.');
+    const { error } = await sb.from('agenda').insert({
+      tipo: d.tipo, escola: d.escola || null, data_hora: dataHoraIso(d.dataHora), descricao: d.descricao || null
+    });
+    if (error) throw error;
+  },
+  async reagendarEvento(d) {
+    await exigirLinhasAfetadas(sb.from('agenda').update({ data_hora: dataHoraIso(d.novaDataHora) }).eq('id', d.id).select('id'));
+  },
+  async excluirEventoAgenda(d) {
+    await exigirLinhasAfetadas(sb.from('agenda').delete().eq('id', d.id).select('id'));
+  },
+  async editarEventoAgenda(d) {
+    const c = {};
+    if (d.tipo) c.tipo = d.tipo;
+    if (d.escola !== undefined) c.escola = d.escola || null;
+    if (d.dataHora) c.data_hora = dataHoraIso(d.dataHora);
+    if (d.descricao !== undefined) c.descricao = d.descricao || null;
+    await exigirLinhasAfetadas(sb.from('agenda').update(c).eq('id', d.id).select('id'));
+  },
+
+  async salvarDadosEscola(d) {
+    const c = {
+      logradouro: txtOuNulo(d.logradouro), numero: txtOuNulo(d.numero), bairro: txtOuNulo(d.bairro),
+      cidade: txtOuNulo(d.cidade), uf: txtOuNulo(d.uf), cep: txtOuNulo(d.cep),
+      email: txtOuNulo(d.emailEscola), telefone: txtOuNulo(d.telefone),
+      ato_criacao: txtOuNulo(d.atoCriacao), publicacao_criacao: paraDataIso(d.publicacaoCriacao),
+      ato_aprovacao: txtOuNulo(d.atoAprovacao), publicacao_aprovacao: paraDataIso(d.publicacaoAprovacao),
+      atualizado_em: new Date().toISOString()
+    };
+    await exigirLinhasAfetadas(sb.from('escolas').update(c).eq('nome', d.escola).select('nome'));
+  },
+  async salvarOrganizacoesCurriculares(d) {
+    const { error } = await sb.rpc('salvar_org_curriculares', { p_escola: d.escola, p_itens: d.organizacoes || [] });
+    if (error) throw error;
+  },
+
+  async salvarAtoAutorizativo(d) {
+    if (d.fileBase64) throw new Error(ARQUIVO_PENDENTE);
+    const pub = paraDataIso(d.dataPublicacao);
+    const anos = parseInt(d.validadeAnos, 10);
+    if (!d.escola || !d.tipoAto || !pub || isNaN(anos)) throw new Error('Escola, tipo, data de publicação e validade são obrigatórios.');
+    const venc = (parseInt(pub.slice(0, 4), 10) + anos) + pub.slice(4);
+    const c = {
+      escola: d.escola, tipo_ato: d.tipoAto, curso_etapa: txtOuNulo(d.cursoEtapa), numero_ato: txtOuNulo(d.numeroAto),
+      data_publicacao: pub, data_homologacao: paraDataIso(d.dataHomologacao), validade_anos: anos, data_vencimento: venc,
+      observacoes: txtOuNulo(d.observacoes), fundamentacao_legal: txtOuNulo(d.fundamentacao), curso_tecnico: txtOuNulo(d.cursoTecnico)
+    };
+    if (d.id) await exigirLinhasAfetadas(sb.from('atos_autorizativos').update(c).eq('id', d.id).select('id'));
+    else { const { error } = await sb.from('atos_autorizativos').insert(c); if (error) throw error; }
+  },
+  async excluirAtoAutorizativo(d) {
+    await exigirLinhasAfetadas(sb.from('atos_autorizativos').delete().eq('id', d.id).select('id'));
+  },
+
+  async salvarLegislacao(d) {
+    if (d.fileBase64) throw new Error(ARQUIVO_PENDENTE);
+    if (!d.tipo || !d.numero || !d.ano) throw new Error('Tipo, número e ano são obrigatórios.');
+    const { data, error } = await sb.from('legislacao').insert({
+      tipo: d.tipo, numero: String(d.numero), ano: String(d.ano), assunto: txtOuNulo(d.assunto),
+      palavras_chave: txtOuNulo(d.palavrasChave), data_publicacao: paraDataIso(d.dataPublicacao), observacoes: txtOuNulo(d.observacoes)
+    }).select('id').single();
+    if (error) throw error;
+    await vinculosLegislacaoSb(data.id, d.vinculos);
+  },
+  async editarLegislacao(d) {
+    if (d.fileBase64) throw new Error(ARQUIVO_PENDENTE);
+    const c = {};
+    if (d.tipo !== undefined) c.tipo = d.tipo;
+    if (d.numero !== undefined) c.numero = String(d.numero);
+    if (d.ano !== undefined) c.ano = String(d.ano);
+    if (d.assunto !== undefined) c.assunto = txtOuNulo(d.assunto);
+    if (d.palavrasChave !== undefined) c.palavras_chave = txtOuNulo(d.palavrasChave);
+    if (d.dataPublicacao !== undefined) c.data_publicacao = paraDataIso(d.dataPublicacao);
+    if (d.observacoes !== undefined) c.observacoes = txtOuNulo(d.observacoes);
+    await exigirLinhasAfetadas(sb.from('legislacao').update(c).eq('id', d.id).select('id'));
+    if (Array.isArray(d.vinculos)) await vinculosLegislacaoSb(d.id, d.vinculos);
+  },
+  async excluirLegislacao(d) {
+    await exigirLinhasAfetadas(sb.from('legislacao').delete().eq('id', d.id).select('id'));
+  }
 });
 
 // Ações ainda não migradas: bloqueadas para NÃO gravar na planilha por engano

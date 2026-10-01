@@ -179,7 +179,7 @@ function criarVisita() {
     descricao: descricao
   };
   
-  postSemResposta(dados, 'Visita agendada e escola notificada!', () => {
+  postSemResposta(dados, 'Visita agendada!', () => {
     mostrarAbaMinhaAgenda();
     carregarAgenda();
     document.getElementById('dataVisita').value = '';
