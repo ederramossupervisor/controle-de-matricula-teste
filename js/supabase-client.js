@@ -664,6 +664,69 @@ async function dashboardProfissionaisSb(u) {
   });
 }
 
+// ------------------------------------------------------------
+// PAINÉIS: DASHBOARD, DESEMPENHO, RANKING, BUSCA GLOBAL, LOG
+// ------------------------------------------------------------
+async function rpcSb(nome, args) {
+  const { data, error } = await sb.rpc(nome, args || {});
+  if (error) throw error;
+  return data;
+}
+
+async function buscaGlobalSb(termoBruto) {
+  const termoTxt = (termoBruto || '').trim();
+  if (termoTxt.length < 2) return [];
+  const p = await carregarPerfilSb();
+  if (!p) return [];
+  const t = termoDeBusca(termoTxt);
+  const minusculo = termoTxt.toLowerCase();
+  const resultados = [];
+
+  // alunos (nome, CPF, telefone ou código)
+  const consultas = [];
+  if (t) consultas.push(sb.from('alunos_v').select('*').like('busca', '%' + t.replace(/[%_\\]/g, '\\$&') + '%').order('nome').limit(12));
+  consultas.push(sb.from('alunos_v').select('*').ilike('codigo', '%' + minusculo.replace(/[%_\\]/g, '\\$&') + '%').order('nome').limit(12));
+  const vistos = new Set();
+  for (const r of await Promise.all(consultas)) {
+    if (r.error) throw r.error;
+    r.data.forEach(function (a) {
+      if (vistos.has(a.seq)) return;
+      vistos.add(a.seq);
+      const tela = alunoSbParaTela(a);
+      resultados.push({ tipo: 'Aluno', titulo: tela.ALUNO, descricao: (tela.TURMA || '—') + ' · ' + tela.ESCOLA, link: 'aluno_' + tela.ID, aluno: tela });
+    });
+  }
+  // o link do aluno usa o número interno, como nas demais telas
+  resultados.forEach(function (r) { if (r.tipo === 'Aluno') r.link = 'aluno_' + r.aluno._row; });
+
+  // legislação
+  const leg = await listarLegislacaoSb(new URL(API_URL + '?tipo=legislacao'));
+  leg.forEach(function (l) {
+    if ((l.tipo + ' ' + l.numero + ' ' + l.ano + ' ' + l.assunto + ' ' + l.palavrasChave).toLowerCase().includes(minusculo)) {
+      resultados.push({ tipo: 'Legislação', titulo: l.tipo + ' ' + l.numero + '/' + l.ano, descricao: l.assunto || 'Sem assunto', link: 'legislacao_' + l.id });
+    }
+  });
+
+  // comunicados
+  const soEscola = !p.is_admin && !(p.perfis || []).includes('SUPERVISOR');
+  const coms = await listarComunicadosSb(soEscola ? p.escola : '');
+  coms.forEach(function (c) {
+    if ((c.titulo + ' ' + c.texto).toLowerCase().includes(minusculo)) {
+      resultados.push({ tipo: 'Comunicado', titulo: c.titulo, descricao: String(c.texto).substring(0, 100), link: 'comunicado_' + c.id });
+    }
+  });
+  return resultados.slice(0, 25);
+}
+
+async function listarLogAcoesSb(u) {
+  const limite = parseInt(u.searchParams.get('limite'), 10) || 100;
+  const { data, error } = await sb.from('log_acoes').select('*').order('data_hora', { ascending: false }).limit(limite);
+  if (error) throw error;
+  return data.map(function (l) {
+    return { dataHora: l.data_hora, usuario: l.usuario, acao: l.acao, detalhes: l.detalhes || '', escola: l.escola || '' };
+  });
+}
+
 const _jsonpLegado = jsonp;
 const ROTAS_JSONP_SB = {
   verificarConsentimento: function () { return consentimentoSb(); },
@@ -682,6 +745,11 @@ const ROTAS_JSONP_SB = {
   listarDadosEscolas: function () { return listarDadosEscolasSb(); },
   listarOrganizacoesCurriculares: function (u) { return listarOrgsSb(u.searchParams.get('escola') || ''); },
   atos: function (u) { return listarAtosSb(u); },
+  dashboard: function (u) { return rpcSb('dashboard_pendencias', { p_escola: u.searchParams.get('escola') || null }); },
+  desempenho: function (u) { return rpcSb('desempenho', { p_escola: u.searchParams.get('escola') || null }); },
+  rankingCache: function () { return rpcSb('ranking_escolas'); },
+  buscaGlobal: function (u) { return buscaGlobalSb(u.searchParams.get('termo') || ''); },
+  logAcoes: function (u) { return listarLogAcoesSb(u); },
   listarProfissionais: function (u) { return listarProfissionaisSb(u); },
   listarDocumentosProfissional: function (u) { return listarDocumentosProfissionalSb(u); },
   dashboardProfissionais: function (u) { return dashboardProfissionaisSb(u); },
@@ -1106,6 +1174,17 @@ Object.assign(ACAO_ALUNO_SB, {
     if (error) throw error;
     if (!data || !data.length) throw new Error('Documento não encontrado ou sem permissão.');
     if (data[0].arquivo_path) await sb.storage.from('profissionais-docs').remove([data[0].arquivo_path]);
+  }
+});
+
+Object.assign(ACAO_ALUNO_SB, {
+  async registrarLogAcao(d) {
+    if (!d.acaoLog) return;
+    const p = await carregarPerfilSb();
+    let escola = d.escola || '';
+    if (!escola && p && !p.is_admin && !(p.perfis || []).includes('SUPERVISOR')) escola = p.escola || '';
+    const { error } = await sb.from('log_acoes').insert({ acao: d.acaoLog, detalhes: d.detalhes || null, escola: escola || null });
+    if (error) throw error;
   }
 });
 
