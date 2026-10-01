@@ -314,10 +314,16 @@ function renderLista(dados) {
           const bg    = a => `rgba(${rgb}, ${a})`;
           const base  = ativo ? 0.12 : 0.10;
           const hover = 0.24;
+          // Tamanho quadrado fixo. O 'important' inline é necessário para vencer
+          // as regras globais de .btn-icone (min-height 44px, width 44px !important no mobile)
+          const TAM = '32px';
+          [['width', TAM], ['height', TAM], ['min-width', TAM], ['min-height', TAM],
+           ['max-width', TAM], ['max-height', TAM], ['flex', '0 0 auto'],
+           ['padding', '0'], ['margin', '0'], ['box-sizing', 'border-box'],
+           ['border-radius', '6px'], ['display', 'inline-flex']
+          ].forEach(([prop, val]) => btn.style.setProperty(prop, val, 'important'));
           btn.style.background   = bg(base);
           btn.style.border       = `1px solid ${bg(ativo ? 0.45 : 0.35)}`;
-          btn.style.borderRadius = '10px';
-          btn.style.boxSizing    = 'border-box';
           btn.style.boxShadow    = '0 1px 3px rgba(0,0,0,0.12)';
           btn.style.transition   = 'transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease';
           if (!ativo) return;
