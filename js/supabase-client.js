@@ -77,14 +77,91 @@ async function solicitarNovaSenhaRecuperacao() {
 }
 
 // ------------------------------------------------------------
-// TERMO DE COMPROMISSO (provisório: ainda vive no Apps Script)
+// TERMO DE COMPROMISSO / CONSENTIMENTO (agora no Supabase)
 // ------------------------------------------------------------
-function statusTermoLegado() {
-  return new Promise(function (resolve) {
-    jsonp(`${API_URL}?tipo=statusTermo&email=${encodeURIComponent(emailUsuario)}`, function (r) {
-      resolve(r && r.erro ? null : r);
-    });
+async function statusTermoSb() {
+  const p = await carregarPerfilSb();
+  if (!p) throw new Error('sessao_expirada');
+  if (p.is_admin) return { enviado: true, status: 'aprovado', aprovado: true };
+  const { data, error } = await sb.from('termos_usuarios').select('*').eq('usuario_id', p.id).maybeSingle();
+  if (error) throw error;
+  if (!data) return { enviado: false, status: null, aprovado: false };
+  return {
+    enviado: true, status: data.status, aprovado: data.status === 'aprovado',
+    fileName: data.arquivo_nome || '', dataEnvio: data.data_envio,
+    aprovadoPor: data.aprovado_por || '', dataAprovacao: data.data_aprovacao, obs: data.obs || ''
+  };
+}
+
+async function consentimentoSb() {
+  const p = await carregarPerfilSb();
+  if (!p) throw new Error('sessao_expirada');
+  if (p.is_admin) return { consentiu: true };
+  const { data, error } = await sb.from('consentimentos').select('id').eq('usuario_id', p.id).eq('versao', '1.0').limit(1);
+  if (error) throw error;
+  return { consentiu: data.length > 0 };
+}
+
+async function listarTermosSb() {
+  const p = await carregarPerfilSb();
+  if (!p || !p.is_admin) return { erro: 'não autorizado' };
+  const { data, error } = await sb.from('termos_usuarios').select('*').order('data_envio', { ascending: false });
+  if (error) throw error;
+  const itens = await Promise.all(data.map(async function (t) {
+    let viewUrl = '';
+    if (t.arquivo_path) {
+      const r = await sb.storage.from('termos').createSignedUrl(t.arquivo_path, 3600);
+      viewUrl = r.data ? r.data.signedUrl : '';
+    } else if (t.arquivo_drive_id) {
+      viewUrl = `https://drive.google.com/file/d/${t.arquivo_drive_id}/view`;
+    }
+    return {
+      email: t.email, status: t.status, fileName: t.arquivo_nome || '', dataEnvio: t.data_envio,
+      aprovadoPor: t.aprovado_por || '', dataAprovacao: t.data_aprovacao, obs: t.obs || '', viewUrl: viewUrl
+    };
+  }));
+  const ordem = { pendente: 0, recusado: 1, aprovado: 2 };
+  itens.sort(function (a, b) { return (ordem[a.status] - ordem[b.status]) || String(b.dataEnvio).localeCompare(String(a.dataEnvio)); });
+  return itens;
+}
+
+async function contarTermosPendentesSb() {
+  const p = await carregarPerfilSb();
+  if (!p || !p.is_admin) return { pendentes: 0 };
+  const { count, error } = await sb.from('termos_usuarios').select('usuario_id', { count: 'exact', head: true }).eq('status', 'pendente');
+  if (error) throw error;
+  return { pendentes: count || 0 };
+}
+
+async function listarUsuariosSb() {
+  const p = await carregarPerfilSb();
+  if (!p || !(p.is_admin || (p.perfis || []).includes('SUPERVISOR'))) return { erro: 'não autorizado' };
+  const { data, error } = await sb.from('usuarios').select('email, nome, perfis, escola, primeiro_acesso');
+  if (error) throw error;
+  let lista = data;
+  if (!p.is_admin) lista = lista.filter(function (u) { return !(u.perfis || []).includes('SUPERVISOR') && u.email !== p.email; });
+  lista.sort(function (a, b) { return String(a.nome || a.email).localeCompare(String(b.nome || b.email), 'pt-BR'); });
+  return lista.map(function (u) {
+    return { EMAIL: u.email, NOME: u.nome || '', PERFIL: (u.perfis || []).join(','), ESCOLA: u.escola || '', PRIMEIRO_ACESSO: u.primeiro_acesso };
   });
+}
+
+async function chamarAdminUsuarios(payload) {
+  const { data, error } = await sb.functions.invoke('admin-usuarios', { body: payload });
+  if (error) {
+    let msg = error.message;
+    try { const j = await error.context.json(); msg = j.msg || msg; } catch (_) {}
+    throw new Error(msg);
+  }
+  if (!data || data.status !== 'ok') throw new Error((data && data.msg) || 'Falha na operação.');
+  return data;
+}
+
+function mostrarSenhaTemporaria(email, r) {
+  if (!r || !r.senhaTemporaria) return;
+  setTimeout(function () {
+    prompt('O e-mail não foi enviado. Copie a senha temporária de ' + email + ' e repasse ao usuário:', r.senhaTemporaria);
+  }, 300);
 }
 
 // ------------------------------------------------------------
@@ -161,7 +238,8 @@ async function buscarDadosAlunosSb(pagina = 1, filtros = {}, limite = 20) {
 
     // Termo de compromisso (provisório): só consulta o Apps Script uma vez por sessão.
     if (!perfil.is_admin && sessionStorage.getItem('termo_ok_' + perfil.email) !== '1') {
-      const t = await statusTermoLegado();
+      let t = null;
+      try { t = await statusTermoSb(); } catch (_) {}
       if (!t) return { erro: 'falha_termo' };
       if (!(t.enviado && t.status === 'aprovado')) {
         return { erro: 'termo_pendente', status: t.enviado ? t.status : null, obs: t.obs || '' };
@@ -405,11 +483,27 @@ async function garantirTurmasSb(escola, turmas) {
 
 // As telas pedem turmas via jsonp(...tipo=turmas...). Aqui desviamos esse pedido para o Supabase.
 const _jsonpLegado = jsonp;
-window.jsonp = function (url, callback) {
+const ROTAS_JSONP_SB = {
+  verificarConsentimento: function () { return consentimentoSb(); },
+  statusTermo: function () { return statusTermoSb(); },
+  listarTermos: function () { return listarTermosSb(); },
+  contarTermosPendentes: function () { return contarTermosPendentesSb(); },
+  usuarios: function () { return listarUsuariosSb(); },
+  // Arquivos de aluno ainda estão no Drive/planilha (linhas antigas): não consultar para não ler a linha errada
+  obterTermoResp: function () { return Promise.resolve({ url: '' }); },
+  obterDeclEdEspecial: function () { return Promise.resolve({ url: '' }); },
+  fotoAluno: function () { return Promise.resolve({ url: '' }); },
+  turmas: function (u) { return listarTurmasSb(u.searchParams.get('escola') || ''); }
+};
+window.jsonp = function (url, callback, onError) {
   try {
     const u = new URL(url);
-    if (u.searchParams.get('tipo') === 'turmas') {
-      listarTurmasSb(u.searchParams.get('escola') || '').then(callback);
+    const rota = ROTAS_JSONP_SB[u.searchParams.get('tipo')];
+    if (rota) {
+      rota(u).then(callback).catch(function (e) {
+        console.error('Erro na rota ' + u.searchParams.get('tipo') + ':', e);
+        if (onError) onError(e); else callback({ erro: 'falha_consulta' });
+      });
       return;
     }
   } catch (_) { /* URL inválida: segue o caminho antigo */ }
@@ -635,16 +729,52 @@ Object.assign(ACAO_ALUNO_SB, {
   }
 });
 
+Object.assign(ACAO_ALUNO_SB, {
+  async registrarConsentimento(d) {
+    const p = await carregarPerfilSb();
+    const { error } = await sb.from('consentimentos').insert({
+      usuario_id: p.id, email: p.email, versao: d.versao || '1.0', ip: d.ip || null
+    });
+    if (error) throw error;
+  },
+
+  async uploadTermoCompromisso(d) {
+    const p = await carregarPerfilSb();
+    const bin = atob(d.fileBase64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const nome = 'termo_' + Date.now() + '.pdf';
+    const caminho = p.id + '/' + nome;
+    const up = await sb.storage.from('termos').upload(caminho, new Blob([bytes], { type: 'application/pdf' }),
+      { contentType: 'application/pdf', upsert: false });
+    if (up.error) throw up.error;
+    const { error } = await sb.from('termos_usuarios').upsert({
+      usuario_id: p.id, email: p.email, status: 'pendente', arquivo_path: caminho, arquivo_drive_id: null,
+      arquivo_nome: nome, data_envio: new Date().toISOString(), aprovado_por: null, data_aprovacao: null, obs: null
+    }, { onConflict: 'usuario_id' });
+    if (error) throw error;
+  },
+
+  async cadastrarUsuario(d) { mostrarSenhaTemporaria(d.email, await chamarAdminUsuarios(d)); },
+  async editarUsuario(d) { await chamarAdminUsuarios(d); },
+  async aprovarTermo(d) { await chamarAdminUsuarios(d); }
+});
+
 // Ações ainda não migradas: bloqueadas para NÃO gravar na planilha por engano
 // enquanto a leitura já vem do Supabase (as duas bases ficariam diferentes).
-const ACOES_ALUNOS_PENDENTES = new Set(['importarDaAbaTemp']);
+const ACOES_ALUNOS_PENDENTES = {
+  importarDaAbaTemp: 'A importação pela aba IMPORT_TEMP da planilha foi desativada. Use a importação por arquivo CSV.',
+  uploadFotoAluno: 'O envio de foto do aluno ainda não foi migrado para o novo servidor.',
+  uploadTermoResponsabilidade: 'O envio do termo de responsabilidade ainda não foi migrado para o novo servidor.',
+  uploadDeclaracaoEdEspecial: 'O envio da declaração de educação especial ainda não foi migrado para o novo servidor.'
+};
 
 const _postSemRespostaLegado = postSemResposta;
 window.postSemResposta = function (dados, msgSucesso, callback, aoFalhar) {
-  if (dados && ACOES_ALUNOS_PENDENTES.has(dados.acao)) {
+  if (dados && ACOES_ALUNOS_PENDENTES[dados.acao]) {
     try { ImportProgress.limpar(); ImportProgress.esconder(); } catch (_) {}
     if (typeof esconderLoading === 'function') esconderLoading();
-    mostrarToast('A importação pela aba IMPORT_TEMP da planilha foi desativada. Use a importação por arquivo CSV.', 'warning');
+    mostrarToast(ACOES_ALUNOS_PENDENTES[dados.acao], 'warning');
     return;
   }
   if (dados && ACAO_ALUNO_SB[dados.acao]) {

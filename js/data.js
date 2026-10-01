@@ -1348,49 +1348,32 @@ async function salvarEdicaoUsuario() {
 }
 
 async function excluirUsuarioAdmin(emailAlvo) {
-  if (!confirm(`Deseja realmente excluir o usuário ${emailAlvo}? Esta ação não pode ser desfeita.`)) return;
+  if (!confirm(`Tem certeza que deseja excluir o usuário ${emailAlvo}? Esta ação não pode ser desfeita.`)) return;
 
   mostrarLoading();
   try {
-    const resp = await fetch(API_URL, {
-      method: "POST",
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        acao: "excluirUsuario",
-        emailLogado: emailUsuario,
-        email: emailAlvo
-      })
-    });
-    const result = await resp.json();
+    const r = await chamarAdminUsuarios({ acao: "excluirUsuario", email: emailAlvo });
     esconderLoading();
-    mostrarToast(result.msg, result.status === "ok" ? "success" : "error");
-    if (result.status === "ok") carregarUsuarios();
+    mostrarToast(r.msg || "Usuário excluído.", "success");
+    carregarUsuarios();
   } catch (e) {
     esconderLoading();
-    mostrarToast("Erro ao excluir usuário.", "error");
+    mostrarToast(e.message || "Erro ao excluir usuário.", "error");
   }
 }
 
 async function resetarSenhaUsuario(emailAlvo) {
-  if (!confirm(`Deseja redefinir a senha do usuário ${emailAlvo}? Uma nova senha será enviada por e-mail.`)) return;
-  
+  if (!confirm(`Deseja redefinir a senha do usuário ${emailAlvo}? Será gerada uma senha temporária.`)) return;
+
   mostrarLoading();
   try {
-    const resp = await fetch(API_URL, {
-      method: "POST",
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        acao: "resetarSenhaAdmin",
-        emailLogado: emailUsuario,
-        email: emailAlvo
-      })
-    });
-    const result = await resp.json();
+    const r = await chamarAdminUsuarios({ acao: "resetarSenhaAdmin", email: emailAlvo });
     esconderLoading();
-    mostrarToast(result.msg, result.status === "ok" ? "success" : "error");
+    mostrarToast(r.msg || "Senha redefinida.", "success");
+    mostrarSenhaTemporaria(emailAlvo, r);
   } catch (e) {
     esconderLoading();
-    mostrarToast("Erro de conexão.", "error");
+    mostrarToast(e.message || "Erro ao redefinir a senha.", "error");
   }
 }
 

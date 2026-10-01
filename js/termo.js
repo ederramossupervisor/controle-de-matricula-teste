@@ -259,7 +259,7 @@ function aprovarTermo(emailAlvo) {
     emailAdmin: emailUsuario,
     emailAlvo: emailAlvo,
     decisao: 'aprovar'
-  }, 'Termo aprovado! E-mail enviado ao usuário.', () => {
+  }, 'Termo aprovado!', () => {
     carregarListaTermos();
   });
   setTimeout(() => carregarListaTermos(), 1500);
