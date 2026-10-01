@@ -164,11 +164,15 @@ function renderLista(dados) {
     // Container vertical para botões de ação (gap reduzido para 1px)
     let botoesAcaoHtml = '';
     if (perfilUsuario !== 'PEDAGOGICO') {
-      botoesAcaoHtml = '<div class="botoes-acao-vertical" style="display:flex;flex-direction:column;gap:6px;align-self:flex-start;flex-shrink:0;border-left:1px solid #94a3b8;padding-left:6px;padding-bottom:24px;margin-left:4px;"></div>';
+      botoesAcaoHtml = '<div class="botoes-acao-vertical" style="display:flex;flex-direction:row;align-items:center;gap:6px;flex-shrink:0;"></div>';
     }
 
     div.innerHTML = `
-<div style="font-weight:600;color:#0f172a;font-size:15px;line-height:1.3;min-height:40px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:8px;text-align:center;" title="${aluno.ALUNO || ''}">${aluno.ALUNO || 'Nome inválido'}</div>      <div style="display:flex; align-items:center; gap:12px;">
+<div style="display:flex;align-items:center;gap:8px;min-height:40px;margin-bottom:8px;">
+          <div style="flex:1;min-width:0;font-weight:600;color:#0f172a;font-size:15px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-align:${botoesAcaoHtml ? 'left' : 'center'};" title="${aluno.ALUNO || ''}">${aluno.ALUNO || 'Nome inválido'}</div>
+          ${botoesAcaoHtml}
+        </div>
+      <div style="display:flex; align-items:center; gap:12px;">
         <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;">
           ${avatarHtml}
           ${turmaHtml}
@@ -181,7 +185,6 @@ function renderLista(dados) {
             ${prazoTexto ? `<span class="prazo-info ${prazoClasse}" style="display:flex;align-items:center;gap:4px;font-size:12px;color:#64748b;"><i class="fas fa-hourglass-half"></i> ${prazoTexto}</span>` : ''}
           </div>
         </div>
-        ${botoesAcaoHtml}
       </div>
     `;
     // Pré‑visualização da foto ao passar o mouse
@@ -321,8 +324,8 @@ function renderLista(dados) {
           );
           btnWhatsApp.innerHTML = `<i class="fab fa-whatsapp" style="font-size:14px; color:${temTelefone ? '#25D366' : '#9ca3af'}; line-height:1;"></i>`;
           btnWhatsApp.style.cssText = `
-            width: 34px;
-            height: 34px;
+            width: 32px;
+            height: 32px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -375,8 +378,8 @@ function renderLista(dados) {
         btnHistorico.setAttribute('data-tooltip', 'Gerar Histórico');
         btnHistorico.innerHTML = '<i class="fas fa-file-export" style="font-size:14px; line-height:1;"></i>';
         btnHistorico.style.cssText = `
-          width: 34px;
-          height: 34px;
+          width: 32px;
+          height: 32px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -406,8 +409,8 @@ function renderLista(dados) {
         btnFicha.setAttribute('data-tooltip', 'Gerar ficha em PDF');
         btnFicha.innerHTML = '<i class="fas fa-file-pdf" style="font-size:14px; color:#ef4444; line-height:1;"></i>';
         btnFicha.style.cssText = `
-          width: 34px;
-          height: 34px;
+          width: 32px;
+          height: 32px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
