@@ -308,6 +308,34 @@ function renderLista(dados) {
     if (perfilUsuario !== 'PEDAGOGICO') {
       const containerAcoes = div.querySelector('.botoes-acao-vertical');
       if (containerAcoes) {
+        // Dá aparência de botão clicável (fundo + borda + sombra + feedback),
+        // para diferenciar dos ícones informativos (documentos, raça/cor etc.)
+        const estilizarBotaoAcao = (btn, rgb, ativo = true) => {
+          const bg    = a => `rgba(${rgb}, ${a})`;
+          const base  = ativo ? 0.12 : 0.10;
+          const hover = 0.24;
+          btn.style.background   = bg(base);
+          btn.style.border       = `1px solid ${bg(ativo ? 0.45 : 0.35)}`;
+          btn.style.borderRadius = '10px';
+          btn.style.boxSizing    = 'border-box';
+          btn.style.boxShadow    = '0 1px 3px rgba(0,0,0,0.12)';
+          btn.style.transition   = 'transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease';
+          if (!ativo) return;
+          btn.addEventListener('mouseenter', () => {
+            btn.style.background = bg(hover);
+            btn.style.boxShadow  = '0 3px 8px rgba(0,0,0,0.18)';
+            btn.style.transform  = 'translateY(-1px)';
+          });
+          btn.addEventListener('mouseleave', () => {
+            btn.style.background = bg(base);
+            btn.style.boxShadow  = '0 1px 3px rgba(0,0,0,0.12)';
+            btn.style.transform  = 'none';
+          });
+          btn.addEventListener('pointerdown', () => { btn.style.transform = 'scale(0.92)'; });
+          btn.addEventListener('pointerup',   () => { btn.style.transform = 'none'; });
+          btn.addEventListener('pointercancel', () => { btn.style.transform = 'none'; });
+        };
+
         // Botão WhatsApp
         const infoWhatsApp = gerarLinkWhatsApp(aluno);
         if (infoWhatsApp.pendentes.length > 0) {
@@ -329,8 +357,6 @@ function renderLista(dados) {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: transparent;
-            border: none;
             cursor: ${temTelefone ? 'pointer' : 'not-allowed'};
             text-decoration: none;
             padding: 0;
@@ -340,6 +366,7 @@ function renderLista(dados) {
             opacity: ${temTelefone ? '1' : '0.6'};
           `;
           btnWhatsApp.classList.add('btn-acao-card');
+          estilizarBotaoAcao(btnWhatsApp, temTelefone ? '37, 211, 102' : '156, 163, 175', temTelefone);
           btnWhatsApp.addEventListener('click', (e) => {
             e.preventDefault();
             if (e.ctrlKey || e.metaKey) {
@@ -383,15 +410,14 @@ function renderLista(dados) {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          background: transparent;
-          border: none;
-          color: var(--text-muted);
+          color: #2563eb;
           cursor: pointer;
           padding: 0;
           margin: 0;
           line-height: 1;
           vertical-align: middle;
         `;
+        estilizarBotaoAcao(btnHistorico, '37, 99, 235');
         btnHistorico.addEventListener('click', (e) => {
           e.stopPropagation();
           if (aluno.ID && aluno.ESCOLA && aluno.TURMA) {
@@ -414,14 +440,13 @@ function renderLista(dados) {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          background: transparent;
-          border: none;
           cursor: pointer;
           padding: 0;
           margin: 0;
           line-height: 1;
           vertical-align: middle;
         `;
+        estilizarBotaoAcao(btnFicha, '239, 68, 68');
         btnFicha.addEventListener('click', (e) => {
           e.stopPropagation();
           gerarFichaPDF(aluno);
