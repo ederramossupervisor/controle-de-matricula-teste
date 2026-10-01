@@ -51,7 +51,9 @@ window.onload = async function () {
     // Trava de segurança: se o carregamento não terminar em 15s, mostra o login.
     setTimeout(function () {
       const splash = document.getElementById("splash");
-      if (splash && splash.style.display !== "none") {
+      // Com _pularSplash a splash já nasce escondida; a flag só cai quando o
+      // carregamento termina (esconderSplash), então ela indica "ainda carregando".
+      if ((splash && splash.style.display !== "none") || window._pularSplash) {
         esconderSplash();
         document.getElementById("app").style.display = "none";
         document.getElementById("login").style.display = "";
@@ -74,6 +76,13 @@ function esconderSplash() {
     window._splashDicaInterval = null;
   }
   const splash = document.getElementById("splash");
+  if (window._pularSplash) {
+    // Página recarregada sem splash: só encerra o spinner que foi mostrado no lugar dela.
+    window._pularSplash = false;
+    if (splash) splash.style.display = 'none';
+    if (typeof esconderLoading === 'function') esconderLoading();
+    return;
+  }
   if (splash) {
     splash.style.opacity = '0';
     setTimeout(() => {
