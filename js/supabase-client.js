@@ -915,6 +915,66 @@ async function guardarArquivoAlunoSb(d, prefixo, rotulo) {
   if (antigo) await sb.storage.from('alunos-arquivos').remove([antigo]);
 }
 
+// ------------------------------------------------------------
+// IMPORTAÇÃO DE PROFISSIONAIS POR CSV
+// ------------------------------------------------------------
+const PROF_CABECALHO_CSV = {"ID": "id", "NOME": "Nome do profissional", "DATA_NASCIMENTO": "Data de nascimento", "FILIACAO_1": "Nome da filiação 1", "FILIACAO_2": "Nome do pai", "UF_NASCIMENTO": "UF de nascimento", "MUNICIPIO_NASCIMENTO": "Município de nascimento", "INEP": "INEP do profissional", "LOGRADOURO": "Logradouro", "NUMERO": "Número", "COMPLEMENTO": "Complemento", "BAIRRO": "Bairro", "CIDADE": "Cidade", "UF": "UF", "CEP": "CEP", "CPF": "CPF", "RG": "Profissional: RG", "CERTIDAO_NASC": "Número de matrícula da certidão nascimento", "ESCOLARIDADE": "Maior nível de escolaridade concluído", "TIPO_ENSINO_MEDIO": "Tipo de ensino médio cursado", "CURSO_SUPERIOR": "Curso superior", "LICENCIATURA": "Licenciatura", "POS_GRADUACAO": "Pós-graduação", "MATRICULA": "Matrícula", "SITUACAO_LOTACAO": "Situação Lotação", "CARGO": "Descrição Cargo", "DATA_ADMISSAO_LOTACAO": "Data Admissão Lotação", "DATA_TERMINO_CONTRATO": "Data Término Contrato", "REGIME": "Regime Trabalho", "CH_MENSAL": "CH mensal", "DATA_DESLIGAMENTO_LOTACAO": "Data Desligamento Lotação", "CH_LOTACAO": "CH Lotação", "CH_VINCULO": "CH vinculo", "LOCAL_TRABALHO": "Descrição Local Trabalho", "SITUACAO_VINCULO": "Situação Vínculo", "DATA_ADMISSAO_VINCULO": "Data Admissão Vínculo", "DATA_DESLIGAMENTO_VINCULO": "Data Desligamento Vínculo", "SEXO": "Profissional: Sexo", "PAIS_ORIGEM": "Profissional: País de origem", "RACA": "Profissional: Raça", "NACIONALIDADE": "Profissional: Nacionalidade", "POVO_INDIGENA": "Profissional: Povo indígena", "LOCALIZACAO_DIFERENCIADA": "Profissional: Localização diferenciada", "DEFICIENCIAS": "Profissional: Deficiências", "TRANSTORNO_GLOBAL": "Profissional: Transtorno Global de desenvolvimento", "ALTAS_HABILIDADES": "Profissional: Altas habilidades/superdotação", "AREAS_CONHECIMENTO": "Profissional: Áreas de conhecimento", "ZONA_RESIDENCIA": "Profissional: Zona residência", "OUTROS_CURSOS": "Profissional: Outros cursos específicos (Formação continuada com mínimo de 80 horas)", "EMAIL": "Profissional: E-mail", "TURMAS": "Profissional: Turmas", "DISCIPLINAS": "Profissional: Disciplinas", "ANO_CONCLUSAO_FORMACAO_1": "Profissional: Ano Conclusão Formação 1", "CURSO_FORMACAO_1": "Profissional: Curso Formação 1", "INSTITUICAO_FORMACAO_1": "Profissional: Instituição Formação 1", "ANO_CONCLUSAO_FORMACAO_2": "Profissional: Ano Conclusão Formação 2", "CURSO_FORMACAO_2": "Profissional: Curso Formação 2", "INSTITUICAO_FORMACAO_2": "Profissional: Instituição Formação 2", "ANO_CONCLUSAO_FORMACAO_3": "Profissional: Ano Conclusão Formação 3", "CURSO_FORMACAO_3": "Profissional: Curso Formação 3", "INSTITUICAO_FORMACAO_3": "Profissional: Instituição Formação 3", "TIPO_POS_1": "Profissional: Tipo pós-graduação 1", "AREA_POS_1": "Profissional: Área pós-graduação 1", "ANO_CONCLUSAO_POS_1": "Profissional: Ano conclusão pós-graduação 1", "NOME_POS_1": "Profissional: Nome pós-graduação 1", "TIPO_POS_2": "Profissional: Tipo pós-graduação 2", "AREA_POS_2": "Profissional: Área pós-graduação 2", "ANO_CONCLUSAO_POS_2": "Profissional: Ano conclusão pós-graduação 2", "NOME_POS_2": "Profissional: Nome pós-graduação 2", "TIPO_POS_3": "Profissional: Tipo pós-graduação 3", "AREA_POS_3": "Profissional: Área pós-graduação 3", "ANO_CONCLUSAO_POS_3": "Profissional: Ano conclusão pós-graduação 3", "NOME_POS_3": "Profissional: Nome pós-graduação 3", "TIPO_POS_4": "Profissional: Tipo pós-graduação 4", "AREA_POS_4": "Profissional: Área pós-graduação 4", "ANO_CONCLUSAO_POS_4": "Profissional: Ano conclusão pós-graduação 4", "NOME_POS_4": "Profissional: Nome pós-graduação 4", "TIPO_POS_5": "Profissional: Tipo pós-graduação 5", "AREA_POS_5": "Profissional: Área pós-graduação 5", "ANO_CONCLUSAO_POS_5": "Profissional: Ano conclusão pós-graduação 5", "NOME_POS_5": "Profissional: Nome pós-graduação 5", "TIPO_POS_6": "Profissional: Tipo pós-graduação 6", "AREA_POS_6": "Profissional: Área pós-graduação 6", "ANO_CONCLUSAO_POS_6": "Profissional: Ano conclusão pós-graduação 6", "NOME_POS_6": "Profissional: Nome pós-graduação 6"};
+
+function normCabecalho(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+async function importarProfissionaisSb(linhasCsv) {
+  const p = await carregarPerfilSb();
+  const perfis = p.perfis || [];
+  if (!p.is_admin && !perfis.includes('SUPERVISOR') && !perfis.includes('SECRETARIA')) throw new Error('Seu perfil não pode importar profissionais.');
+  if (!linhasCsv || !linhasCsv.length) throw new Error('Nenhum profissional para importar.');
+
+  // escolas que a pessoa enxerga (o banco já filtra pelo perfil)
+  const { data: esc, error: e0 } = await sb.from('escolas').select('nome');
+  if (e0) throw e0;
+  const escolas = {};
+  esc.forEach(function (e) { escolas[normEscolaSb(e.nome)] = e.nome; });
+
+  // descobre qual coluna do CSV corresponde a cada campo (exato; senão, ignorando acentos e maiúsculas)
+  const cabecalhosCsv = Object.keys(linhasCsv[0]);
+  const achar = function (nome) {
+    if (cabecalhosCsv.indexOf(nome) >= 0) return nome;
+    const alvo = normCabecalho(nome);
+    return cabecalhosCsv.filter(function (h) { return normCabecalho(h) === alvo; })[0] || null;
+  };
+  const colunaCsv = {};
+  Object.keys(PROF_CABECALHO_CSV).forEach(function (campo) { const h = achar(PROF_CABECALHO_CSV[campo]); if (h) colunaCsv[campo] = h; });
+  const faltam = ['ID', 'NOME', 'LOCAL_TRABALHO'].filter(function (c) { return !colunaCsv[c]; }).map(function (c) { return PROF_CABECALHO_CSV[c]; });
+  if (faltam.length) throw new Error('Colunas não encontradas no CSV: ' + faltam.join(', '));
+
+  const r = { processados: 0, falhas: 0, naoPermitidos: 0 };
+  const porChave = {};
+  linhasCsv.forEach(function (linha) {
+    const codigo = txtOuNulo(linha[colunaCsv.ID]);
+    const nome = txtOuNulo(linha[colunaCsv.NOME]);
+    const local = txtOuNulo(linha[colunaCsv.LOCAL_TRABALHO]);
+    if (!codigo || !nome || !local) { r.falhas++; return; }
+    const escola = escolas[normEscolaSb(local)];
+    if (!escola) { r.naoPermitidos++; return; }
+    const reg = { escola: escola, codigo: codigo };
+    Object.keys(colunaCsv).forEach(function (campo) {
+      if (campo === 'ID') return;
+      const bruto = linha[colunaCsv[campo]];
+      reg[campo.toLowerCase()] = PROF_DATAS.indexOf(campo) >= 0 ? paraDataIso(bruto) : txtOuNulo(bruto);
+    });
+    porChave[escola + '|' + codigo] = reg;     // se o ID repetir, vale o último
+  });
+
+  const registros = Object.keys(porChave).map(function (k) { return porChave[k]; });
+  for (let i = 0; i < registros.length; i += 200) {
+    const { error } = await sb.from('profissionais').upsert(registros.slice(i, i + 200), { onConflict: 'escola,codigo' });
+    if (error) throw error;
+    r.processados += Math.min(200, registros.length - i);
+  }
+  return r;
+}
+
 const _jsonpLegado = jsonp;
 const ROTAS_JSONP_SB = {
   verificarConsentimento: function () { return consentimentoSb(); },

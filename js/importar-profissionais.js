@@ -91,7 +91,7 @@ function renderizarPreviewProfissionais(lista) {
 // =========================
 // EXECUTAR IMPORTAÇÃO
 // =========================
-function executarImportacaoProfissionais() {
+async function executarImportacaoProfissionais() {
   if (profissionaisImportados.length === 0) {
     mostrarToast('Nenhum profissional para importar.', 'warning');
     return;
@@ -99,51 +99,20 @@ function executarImportacaoProfissionais() {
 
   const btn = document.getElementById('btnExecutarImportProfissionais');
   showButtonLoading(btn);
-
-  const fileInput = document.getElementById('arquivoCSVProfissionais');
-  const file = fileInput.files[0];
-  if (!file) {
-    mostrarToast('Arquivo não encontrado.', 'error');
+  try {
+    const r = await importarProfissionaisSb(profissionaisImportados);
+    const ignorados = r.falhas + r.naoPermitidos;
+    let msg = `${r.processados} profissionais importados/atualizados.`;
+    if (r.falhas) msg += ` ${r.falhas} sem ID, nome ou local de trabalho.`;
+    if (r.naoPermitidos) msg += ` ${r.naoPermitidos} de escolas que você não pode alterar.`;
+    mostrarToast(msg, ignorados ? 'warning' : 'success');
+    profissionaisImportados = [];
+    fecharModalImportacaoProfissionais();
+    if (typeof carregarProfissionais === 'function') carregarProfissionais();
+  } catch (e) {
+    console.error('Erro ao importar profissionais:', e);
+    mostrarToast('Erro na importação: ' + (e.message || 'falha desconhecida'), 'error');
+  } finally {
     hideButtonLoading(btn);
-    return;
   }
-
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    mostrarToast('A importação de profissionais por CSV ainda não foi migrada para o novo servidor.', 'warning');
-    return;
-    // (código antigo abaixo desativado)
-    const base64 = e.target.result.split(',')[1];
-    const dados = {
-      acao: 'enviarCSVParaFilaProfissionais',
-      email: emailUsuario,
-      csvBase64: base64
-    };
-
-    fetch(API_URL_PROFISSIONAIS, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(dados)
-    })
-    .then(response => response.json())
-    .then(result => {
-      if (result.status === 'ok') {
-        mostrarToast('Importação agendada! Será processada em instantes.', 'success');
-      } else {
-        mostrarToast('Erro: ' + (result.msg || 'Desconhecido'), 'error');
-      }
-    })
-    .catch(error => {
-      mostrarToast('Falha na comunicação. Verifique sua internet.', 'error');
-    })
-    .finally(() => {
-      hideButtonLoading(btn);
-      fecharModalImportacaoProfissionais();
-    });
-  };
-  reader.onerror = function() {
-    mostrarToast('Erro ao ler o arquivo.', 'error');
-    hideButtonLoading(btn);
-  };
-  reader.readAsDataURL(file);
 }
