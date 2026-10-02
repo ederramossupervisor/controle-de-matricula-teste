@@ -509,9 +509,8 @@ function compartilharLegislacao(item) {
   const texto = `${titulo} - ${item.assunto || 'Sem assunto'}`;
   
   // Link para visualização do PDF (se existir)
-  const viewUrl = item.arquivoId 
-    ? `https://drive.google.com/file/d/${item.arquivoId}/view` 
-    : '';
+  const viewUrl = item.arquivoUrl 
+    || (item.arquivoId ? `https://drive.google.com/file/d/${item.arquivoId}/view` : '');
   
   // Texto completo para compartilhar
   const shareText = `📜 ${texto}\n\n${viewUrl ? `🔗 Acesse o documento: ${viewUrl}` : 'Documento sem PDF anexado.'}`;

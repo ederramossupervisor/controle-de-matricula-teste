@@ -1512,8 +1512,8 @@ function renderizarListaLegislacao(lista) {
       div.style.background = '#fef2f2';
     }
 
-    const viewUrl = item.arquivoId ? `https://drive.google.com/file/d/${item.arquivoId}/view` : '';
-    const downloadUrl = item.arquivoId ? `https://drive.google.com/uc?export=download&id=${item.arquivoId}` : '';
+    const viewUrl = item.arquivoUrl || (item.arquivoId ? `https://drive.google.com/file/d/${item.arquivoId}/view` : '');
+    const downloadUrl = item.arquivoUrlDownload || (item.arquivoId ? `https://drive.google.com/uc?export=download&id=${item.arquivoId}` : '');
 
     // Monta links de vínculos
     let vinculosHtml = '';
@@ -1594,8 +1594,8 @@ function abrirDetalheLegislacao(id) {
       vinculosHtml += '</ul>';
     }
 
-    const viewUrl = item.arquivoId ? `https://drive.google.com/file/d/${item.arquivoId}/view` : '';
-    const downloadUrl = item.arquivoId ? `https://drive.google.com/uc?export=download&id=${item.arquivoId}` : '';
+    const viewUrl = item.arquivoUrl || (item.arquivoId ? `https://drive.google.com/file/d/${item.arquivoId}/view` : '');
+    const downloadUrl = item.arquivoUrlDownload || (item.arquivoId ? `https://drive.google.com/uc?export=download&id=${item.arquivoId}` : '');
 
     const conteudo = `
       <div style="background:var(--card-bg); padding:16px; border-radius:12px; border:1px solid var(--card-border); position:relative;">
@@ -2692,8 +2692,7 @@ async function uploadTermoResp(row, escola) {
 }
 
 function visualizarTermo() {
-  const id = dadosAlunoAtual._TERMO_RESP_ID;
-  if (id) window.open(`https://drive.google.com/file/d/${id}/view`, '_blank');
+  abrirArquivoAluno(dadosAlunoAtual._TERMO_RESP_ID);
 }
 
 function removerTermo(row, escola) {
@@ -2779,8 +2778,7 @@ async function uploadDeclEdEsp(row, escola) {
 }
 
 function visualizarDeclEdEsp() {
-  const id = dadosAlunoAtual._DECL_ED_ESPECIAL_ID;
-  if (id) window.open(`https://drive.google.com/file/d/${id}/view`, '_blank');
+  abrirArquivoAluno(dadosAlunoAtual._DECL_ED_ESPECIAL_ID);
 }
 
 function removerDeclEdEsp(row, escola) {

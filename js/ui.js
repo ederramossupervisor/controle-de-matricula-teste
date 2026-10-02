@@ -1087,7 +1087,7 @@ function criarCardAto(ato, mostrarEscola) {
     <p style="margin: 4px 0;"><i class="fas fa-hourglass-half"></i> Validade: ${ato.validadeAnos} anos</p>
     ${ato.fundamentacao ? `<p style="margin: 4px 0; font-size: 12px;"><i class="fas fa-gavel"></i> Fund.: ${ato.fundamentacao}</p>` : ''}
     <div style="margin-top: 8px;">
-      ${ato.arquivoId ? `<a href="https://drive.google.com/file/d/${ato.arquivoId}/view" target="_blank" class="btn-pequeno"><i class="fas fa-file-pdf"></i> Ver Ato</a>` : ''}
+      ${(ato.arquivoUrl || ato.arquivoId) ? `<a href="${ato.arquivoUrl || ('https://drive.google.com/file/d/' + ato.arquivoId + '/view')}" target="_blank" class="btn-pequeno"><i class="fas fa-file-pdf"></i> Ver Ato</a>` : ''}
       <button class="btn-pequeno" onclick="event.stopPropagation(); editarAto('${ato.id}')"><i class="fas fa-edit"></i> Editar</button>
       <button class="btn-pequeno" onclick="event.stopPropagation(); excluirAto('${ato.id}')"><i class="fas fa-trash"></i> Excluir</button>
     </div>
@@ -1470,9 +1470,8 @@ function compartilharLegislacao(item) {
   const titulo = `${tipo} ${numero}/${ano}`;
   const texto = `${titulo} - ${assunto || 'Sem assunto'}`;
   
-  const viewUrl = item.arquivoId 
-    ? `https://drive.google.com/file/d/${item.arquivoId}/view` 
-    : '';
+  const viewUrl = item.arquivoUrl 
+    || (item.arquivoId ? `https://drive.google.com/file/d/${item.arquivoId}/view` : '');
   
   const shareText = `📜 ${texto}\n\n${viewUrl ? `🔗 Acesse o documento: ${viewUrl}` : 'Documento sem PDF anexado.'}`;
 

@@ -207,11 +207,12 @@ function alunoSbParaTela(a) {
     NATURALIDADE: a.naturalidade || '',
     UF_NASCIMENTO: a.uf_nascimento || '',
     NACIONALIDADE: a.nacionalidade || '',
-    FOTO: a.foto_drive_id ? `https://drive.google.com/thumbnail?id=${a.foto_drive_id}&sz=w200` : null,
-    _TERMO_RESP_ID: a.termo_resp_drive_id || null,
-    TERMO_RESP: drive(a.termo_resp_drive_id),
-    _DECL_ED_ESPECIAL_ID: a.decl_ed_especial_drive_id || null,
-    DECL_ED_ESPECIAL: drive(a.decl_ed_especial_drive_id)
+    FOTO: (!a.foto_path && a.foto_drive_id) ? `https://drive.google.com/thumbnail?id=${a.foto_drive_id}&sz=w200` : null,
+    _TERMO_RESP_ID: a.termo_resp_path ? 'sb:' + encodeURIComponent(a.termo_resp_path) : (a.termo_resp_drive_id || null),
+    TERMO_RESP: a.termo_resp_path ? null : drive(a.termo_resp_drive_id),
+    _DECL_ED_ESPECIAL_ID: a.decl_ed_especial_path ? 'sb:' + encodeURIComponent(a.decl_ed_especial_path) : (a.decl_ed_especial_drive_id || null),
+    DECL_ED_ESPECIAL: a.decl_ed_especial_path ? null : drive(a.decl_ed_especial_drive_id),
+    _FOTO_PATH: a.foto_path || null
   };
 }
 
@@ -300,10 +301,20 @@ async function buscarDadosAlunosSb(pagina = 1, filtros = {}, limite = 20) {
       ultima = r.ultima_atualizacao || null;
     }
 
+    // fotos guardadas no Storage: links temporários (1 h), em lote
+    const telas = linhas.map(alunoSbParaTela);
+    const comFoto = telas.filter(function (t) { return t._FOTO_PATH; });
+    if (comFoto.length) {
+      const r = await sb.storage.from('alunos-arquivos').createSignedUrls(comFoto.map(function (t) { return t._FOTO_PATH; }), 3600);
+      const porCaminho = {};
+      (r.data || []).forEach(function (x) { if (x.signedUrl) porCaminho[x.path] = x.signedUrl; });
+      comFoto.forEach(function (t) { t.FOTO = porCaminho[t._FOTO_PATH] || null; });
+    }
+
     return {
       perfil: perfis.join(','),
       escola: perfil.escola,
-      alunos: linhas.map(alunoSbParaTela),
+      alunos: telas,
       totalRegistros: total,
       paginaAtual: pagina,
       totalPaginas: Math.ceil(total / limite),
@@ -557,7 +568,12 @@ async function listarAtosSb(u) {
   if (tecnico) q = q.eq('curso_tecnico', tecnico);
   const { data, error } = await q.order('escola').order('data_publicacao', { ascending: false });
   if (error) throw error;
-  return data.map(atoParaTela);
+  const links = await linksArquivosSb('atos', data);
+  return data.map(function (a, i) {
+    const t = atoParaTela(a);
+    if (a.arquivo_path) { t.arquivoUrl = links[i].viewUrl; t.arquivoUrlDownload = links[i].downloadUrl; }
+    return t;
+  });
 }
 
 async function listarLegislacaoSb(u) {
@@ -577,6 +593,8 @@ async function listarLegislacaoSb(u) {
       id: l.id, tipo: l.tipo, numero: l.numero, ano: l.ano, assunto: l.assunto || '', arquivoId: l.arquivo_drive_id || '',
       vinculosIds: meus.map(function (v) { return v.destino; }), tipoVinculoObj: tipoVinculoObj,
       dataPublicacao: l.data_publicacao ? dataParaTela(l.data_publicacao) : '', observacoes: l.observacoes || '',
+      arquivoUrl: l.arquivo_path ? sb.storage.from('legislacao').getPublicUrl(l.arquivo_path).data.publicUrl : '',
+      arquivoUrlDownload: l.arquivo_path ? sb.storage.from('legislacao').getPublicUrl(l.arquivo_path, { download: true }).data.publicUrl : '',
       cadastradoPor: l.cadastrado_por || '', dataCadastro: l.data_cadastro, palavrasChave: l.palavras_chave || '',
       vinculosDetalhes: meus.map(function (v) {
         const d = porId[v.destino];
@@ -851,6 +869,52 @@ async function listarModelosEscolaSb() {
   return oficiais.concat(proprios);
 }
 
+// ------------------------------------------------------------
+// ARQUIVOS DE ALUNO (foto, termo de responsabilidade, declaração)
+// ------------------------------------------------------------
+// As telas esperam um "ID" no estilo do Drive: arquivos novos usam o prefixo "sb:" + caminho codificado.
+async function urlArquivoAlunoSb(row, prefixo) {
+  const { data, error } = await sb.from('alunos').select(prefixo + '_path, ' + prefixo + '_drive_id').eq('seq', Number(row)).maybeSingle();
+  if (error) throw error;
+  if (!data) return { url: '' };
+  if (data[prefixo + '_path']) return { url: 'https://drive.google.com/file/d/sb:' + encodeURIComponent(data[prefixo + '_path']) + '/view' };
+  if (data[prefixo + '_drive_id']) return { url: 'https://drive.google.com/file/d/' + data[prefixo + '_drive_id'] + '/view' };
+  return { url: '' };
+}
+
+async function abrirArquivoAluno(id) {
+  if (!id) return;
+  if (!String(id).startsWith('sb:')) { window.open('https://drive.google.com/file/d/' + id + '/view', '_blank'); return; }
+  const janela = window.open('', '_blank');     // abre já, para o navegador não bloquear
+  const { data, error } = await sb.storage.from('alunos-arquivos').createSignedUrl(decodeURIComponent(String(id).slice(3)), 600);
+  if (error || !data) { if (janela) janela.close(); mostrarToast('Não foi possível abrir o arquivo.', 'error'); return; }
+  if (janela) janela.location = data.signedUrl; else window.open(data.signedUrl, '_blank');
+}
+
+async function guardarArquivoAlunoSb(d, prefixo, rotulo) {
+  const { data: aluno, error: e0 } = await sb.from('alunos').select('id, ' + prefixo + '_path').eq('seq', Number(d.row)).maybeSingle();
+  if (e0) throw e0;
+  if (!aluno) throw new Error('Aluno não encontrado ou sem permissão.');
+  const antigo = aluno[prefixo + '_path'];
+  let novo = null;
+  if (d.fileBase64) {
+    const tipo = d.mimeType || 'application/octet-stream';
+    const ext = (d.fileName && d.fileName.indexOf('.') >= 0) ? d.fileName.split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '') : 'bin';
+    novo = aluno.id + '/' + rotulo + '_' + Date.now() + '.' + (ext || 'bin');
+    const up = await sb.storage.from('alunos-arquivos').upload(novo, base64ParaBlob(d.fileBase64, tipo), { contentType: tipo, upsert: false });
+    if (up.error) throw up.error;
+  }
+  const campos = {};
+  campos[prefixo + '_path'] = novo;
+  campos[prefixo + '_drive_id'] = null;
+  const { data: res, error } = await sb.from('alunos').update(campos).eq('id', aluno.id).select('id');
+  if (error || !res || !res.length) {
+    if (novo) await sb.storage.from('alunos-arquivos').remove([novo]);
+    throw error || new Error('Sem permissão para alterar este aluno.');
+  }
+  if (antigo) await sb.storage.from('alunos-arquivos').remove([antigo]);
+}
+
 const _jsonpLegado = jsonp;
 const ROTAS_JSONP_SB = {
   verificarConsentimento: function () { return consentimentoSb(); },
@@ -858,10 +922,19 @@ const ROTAS_JSONP_SB = {
   listarTermos: function () { return listarTermosSb(); },
   contarTermosPendentes: function () { return contarTermosPendentesSb(); },
   usuarios: function () { return listarUsuariosSb(); },
-  // Arquivos de aluno ainda estão no Drive/planilha (linhas antigas): não consultar para não ler a linha errada
-  obterTermoResp: function () { return Promise.resolve({ url: '' }); },
-  obterDeclEdEspecial: function () { return Promise.resolve({ url: '' }); },
-  fotoAluno: function () { return Promise.resolve({ url: '' }); },
+  obterTermoResp: function (u) { return urlArquivoAlunoSb(u.searchParams.get('row'), 'termo_resp'); },
+  obterDeclEdEspecial: function (u) { return urlArquivoAlunoSb(u.searchParams.get('row'), 'decl_ed_especial'); },
+  fotoAluno: async function (u) {
+    const { data, error } = await sb.from('alunos').select('foto_path, foto_drive_id')
+      .eq('escola', u.searchParams.get('escola') || '').eq('codigo', u.searchParams.get('id') || '').maybeSingle();
+    if (error) throw error;
+    if (!data) return { url: '' };
+    if (data.foto_path) {
+      const r = await sb.storage.from('alunos-arquivos').createSignedUrl(data.foto_path, 3600);
+      return { url: r.data ? r.data.signedUrl : '' };
+    }
+    return { url: data.foto_drive_id ? 'https://drive.google.com/thumbnail?id=' + data.foto_drive_id + '&sz=w200' : '' };
+  },
   turmas: function (u) { return listarTurmasSb(u.searchParams.get('escola') || ''); },
   comunicados: function (u) { return listarComunicadosSb(u.searchParams.get('escola') || ''); },
   agenda: function () { return listarAgendaSb(); },
@@ -869,6 +942,17 @@ const ROTAS_JSONP_SB = {
   listarDadosEscolas: function () { return listarDadosEscolasSb(); },
   listarOrganizacoesCurriculares: function (u) { return listarOrgsSb(u.searchParams.get('escola') || ''); },
   atos: function (u) { return listarAtosSb(u); },
+  // Histórico escolar: gerado pelo Apps Script, que consulta o Supabase com o login desta pessoa
+  gerarHistorico: function (u) {
+    return new Promise(async function (resolve, reject) {
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) { resolve({ erro: 'Sessão expirada. Entre novamente.' }); return; }
+        u.searchParams.set('token', session.access_token);
+        _jsonpLegado(u.toString(), resolve);
+      } catch (e) { reject(e); }
+    });
+  },
   processos: function (u) { return listarProcessosSb(u); },
   documentos: function (u) { return listarDocumentosSb(u); },
   listarTiposProcesso: async function (u) {
@@ -1158,7 +1242,6 @@ Object.assign(ACAO_ALUNO_SB, {
   async aprovarTermo(d) { await chamarAdminUsuarios(d); }
 });
 
-const ARQUIVO_PENDENTE = 'O envio de arquivos (PDF) deste cadastro ainda não foi migrado para o novo servidor. Salve sem anexar arquivo.';
 
 function dataHoraIso(v) {
   const d = new Date(v);
@@ -1232,7 +1315,6 @@ Object.assign(ACAO_ALUNO_SB, {
   },
 
   async salvarAtoAutorizativo(d) {
-    if (d.fileBase64) throw new Error(ARQUIVO_PENDENTE);
     const pub = paraDataIso(d.dataPublicacao);
     const anos = parseInt(d.validadeAnos, 10);
     if (!d.escola || !d.tipoAto || !pub || isNaN(anos)) throw new Error('Escola, tipo, data de publicação e validade são obrigatórios.');
@@ -1242,25 +1324,50 @@ Object.assign(ACAO_ALUNO_SB, {
       data_publicacao: pub, data_homologacao: paraDataIso(d.dataHomologacao), validade_anos: anos, data_vencimento: venc,
       observacoes: txtOuNulo(d.observacoes), fundamentacao_legal: txtOuNulo(d.fundamentacao), curso_tecnico: txtOuNulo(d.cursoTecnico)
     };
-    if (d.id) await exigirLinhasAfetadas(sb.from('atos_autorizativos').update(c).eq('id', d.id).select('id'));
-    else { const { error } = await sb.from('atos_autorizativos').insert(c); if (error) throw error; }
+    let novoCaminho = null, caminhoAntigo = null;
+    if (d.fileBase64) {
+      const slug = await slugEscolaSb(d.escola);
+      novoCaminho = slug + '/' + Date.now() + '_' + nomeSeguroArquivo(d.fileName || 'ato.pdf');
+      const up = await sb.storage.from('atos').upload(novoCaminho, base64ParaBlob(d.fileBase64, d.mimeType || 'application/pdf'), { contentType: d.mimeType || 'application/pdf', upsert: false });
+      if (up.error) throw up.error;
+      c.arquivo_path = novoCaminho; c.arquivo_drive_id = null;
+    }
+    try {
+      if (d.id) {
+        if (novoCaminho) { const ant = await sb.from('atos_autorizativos').select('arquivo_path').eq('id', d.id).maybeSingle(); caminhoAntigo = ant.data ? ant.data.arquivo_path : null; }
+        await exigirLinhasAfetadas(sb.from('atos_autorizativos').update(c).eq('id', d.id).select('id'));
+      } else {
+        const { error } = await sb.from('atos_autorizativos').insert(c);
+        if (error) throw error;
+      }
+    } catch (e) {
+      if (novoCaminho) await sb.storage.from('atos').remove([novoCaminho]);
+      throw e;
+    }
+    if (caminhoAntigo) await sb.storage.from('atos').remove([caminhoAntigo]);
   },
   async excluirAtoAutorizativo(d) {
-    await exigirLinhasAfetadas(sb.from('atos_autorizativos').delete().eq('id', d.id).select('id'));
+    const r = await exigirLinhasAfetadas(sb.from('atos_autorizativos').delete().eq('id', d.id).select('arquivo_path'));
+    if (r[0] && r[0].arquivo_path) await sb.storage.from('atos').remove([r[0].arquivo_path]);
   },
 
   async salvarLegislacao(d) {
-    if (d.fileBase64) throw new Error(ARQUIVO_PENDENTE);
     if (!d.tipo || !d.numero || !d.ano) throw new Error('Tipo, número e ano são obrigatórios.');
+    let caminho = null;
+    if (d.fileBase64) {
+      caminho = 'leg_' + Date.now() + '_' + nomeSeguroArquivo(d.fileName || 'documento.pdf');
+      const up = await sb.storage.from('legislacao').upload(caminho, base64ParaBlob(d.fileBase64, d.mimeType || 'application/pdf'), { contentType: d.mimeType || 'application/pdf', upsert: false });
+      if (up.error) throw up.error;
+    }
     const { data, error } = await sb.from('legislacao').insert({
+      arquivo_path: caminho,
       tipo: d.tipo, numero: String(d.numero), ano: String(d.ano), assunto: txtOuNulo(d.assunto),
       palavras_chave: txtOuNulo(d.palavrasChave), data_publicacao: paraDataIso(d.dataPublicacao), observacoes: txtOuNulo(d.observacoes)
     }).select('id').single();
-    if (error) throw error;
+    if (error) { if (caminho) await sb.storage.from('legislacao').remove([caminho]); throw error; }
     await vinculosLegislacaoSb(data.id, d.vinculos);
   },
   async editarLegislacao(d) {
-    if (d.fileBase64) throw new Error(ARQUIVO_PENDENTE);
     const c = {};
     if (d.tipo !== undefined) c.tipo = d.tipo;
     if (d.numero !== undefined) c.numero = String(d.numero);
@@ -1269,11 +1376,27 @@ Object.assign(ACAO_ALUNO_SB, {
     if (d.palavrasChave !== undefined) c.palavras_chave = txtOuNulo(d.palavrasChave);
     if (d.dataPublicacao !== undefined) c.data_publicacao = paraDataIso(d.dataPublicacao);
     if (d.observacoes !== undefined) c.observacoes = txtOuNulo(d.observacoes);
-    await exigirLinhasAfetadas(sb.from('legislacao').update(c).eq('id', d.id).select('id'));
+    let caminhoNovo = null, caminhoAntigo = null;
+    if (d.fileBase64) {
+      caminhoNovo = 'leg_' + Date.now() + '_' + nomeSeguroArquivo(d.fileName || 'documento.pdf');
+      const up = await sb.storage.from('legislacao').upload(caminhoNovo, base64ParaBlob(d.fileBase64, d.mimeType || 'application/pdf'), { contentType: d.mimeType || 'application/pdf', upsert: false });
+      if (up.error) throw up.error;
+      const ant = await sb.from('legislacao').select('arquivo_path').eq('id', d.id).maybeSingle();
+      caminhoAntigo = ant.data ? ant.data.arquivo_path : null;
+      c.arquivo_path = caminhoNovo; c.arquivo_drive_id = null;
+    }
+    try {
+      await exigirLinhasAfetadas(sb.from('legislacao').update(c).eq('id', d.id).select('id'));
+    } catch (e) {
+      if (caminhoNovo) await sb.storage.from('legislacao').remove([caminhoNovo]);
+      throw e;
+    }
+    if (caminhoAntigo) await sb.storage.from('legislacao').remove([caminhoAntigo]);
     if (Array.isArray(d.vinculos)) await vinculosLegislacaoSb(d.id, d.vinculos);
   },
   async excluirLegislacao(d) {
-    await exigirLinhasAfetadas(sb.from('legislacao').delete().eq('id', d.id).select('id'));
+    const r = await exigirLinhasAfetadas(sb.from('legislacao').delete().eq('id', d.id).select('arquivo_path'));
+    if (r[0] && r[0].arquivo_path) await sb.storage.from('legislacao').remove([r[0].arquivo_path]);
   }
 });
 
@@ -1406,13 +1529,16 @@ Object.assign(ACAO_ALUNO_SB, {
   }
 });
 
+Object.assign(ACAO_ALUNO_SB, {
+  async uploadFotoAluno(d) { await guardarArquivoAlunoSb(d, 'foto', 'foto'); },
+  async uploadTermoResponsabilidade(d) { await guardarArquivoAlunoSb(d, 'termo_resp', 'termo'); },
+  async uploadDeclaracaoEdEspecial(d) { await guardarArquivoAlunoSb(d, 'decl_ed_especial', 'declaracao'); }
+});
+
 // Ações ainda não migradas: bloqueadas para NÃO gravar na planilha por engano
 // enquanto a leitura já vem do Supabase (as duas bases ficariam diferentes).
 const ACOES_ALUNOS_PENDENTES = {
-  importarDaAbaTemp: 'A importação pela aba IMPORT_TEMP da planilha foi desativada. Use a importação por arquivo CSV.',
-  uploadFotoAluno: 'O envio de foto do aluno ainda não foi migrado para o novo servidor.',
-  uploadTermoResponsabilidade: 'O envio do termo de responsabilidade ainda não foi migrado para o novo servidor.',
-  uploadDeclaracaoEdEspecial: 'O envio da declaração de educação especial ainda não foi migrado para o novo servidor.'
+  importarDaAbaTemp: 'A importação pela aba IMPORT_TEMP da planilha foi desativada. Use a importação por arquivo CSV.'
 };
 
 const _postSemRespostaLegado = postSemResposta;
