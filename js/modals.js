@@ -453,19 +453,13 @@ async function salvarTurma() {
   try {
     for (let turma of turmas) {
       try {
-        await fetch(API_URL, {
-          method: "POST",
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            acao: "cadastrarTurma",
-            email: emailUsuario,
-            escola: escola,
-            turma: turma
-          })
-        });
+        // Grava direto no Supabase (o banco confere se a pessoa pode gravar nesta escola)
+        await ACAO_ALUNO_SB.cadastrarTurma({ escola: escola, turma: turma });
         sucessos++;
       } catch (e) {
-        erros.push(`${turma}: Erro de conexão`);
+        let motivo = (e && e.message) ? e.message : 'Erro ao cadastrar';
+        if (/row-level security|permission denied/i.test(motivo)) motivo = 'sem permissão nesta escola';
+        erros.push(`${turma}: ${motivo}`);
       }
     }
   } finally {
@@ -476,10 +470,13 @@ async function salvarTurma() {
   if (sucessos > 0) mensagem += `${sucessos} turma(s) cadastrada(s) com sucesso. `;
   if (erros.length > 0) mensagem += `Erros: ${erros.join(', ')}`;
   
-  if (erros.length === 0) {
-    mostrarToast(mensagem, "success");
+  // limpa o cache sempre que alguma turma entrou (mesmo que outras tenham falhado)
+  if (sucessos > 0) {
     limparCacheTurmas(escola);
     limparCacheTurmas("todas");
+  }
+  if (erros.length === 0) {
+    mostrarToast(mensagem, "success");
   } else {
     mostrarToast(mensagem, "error", 8000);
   }
