@@ -87,9 +87,8 @@ async function abrirChecklistPorDashboard(escola, turma) {
   const modal = document.getElementById('modalChecklistLote');
   if (modal) modal.style.display = 'flex';
 
-  // Atualiza o nome da escola exibido no modal
-  const escolaSpan = document.getElementById('escolaAtualChecklist');
-  if (escolaSpan) escolaSpan.textContent = escola;
+  // Define a escola do checklist (texto fixo para secretaria, seletor para supervisor/admin)
+  definirEscolaChecklist(escola);
 
   // Preenche o select com a turma desejada
   const selectTurma = document.getElementById('selectTurmaChecklist');
