@@ -2109,30 +2109,6 @@ select {
 .check-doc-individual:checked { accent-color: #10b981; }
 
 /* ==========================================
-   ACOMPANHAMENTO PT
-   ========================================== */
-#modalAcompanhamentoPT .modal-body {
-  overflow-x: hidden !important;
-  overflow-y: auto;
-  padding-right: 12px;
-  box-sizing: border-box;
-}
-
-#tabelaAcompanhamentoPT {
-  max-width: 100%;
-  overflow-x: hidden;
-  box-sizing: border-box;
-}
-
-#tabelaAcompanhamentoPT > div,
-#tabelaAcompanhamentoPT table,
-#tabelaAcompanhamentoPT details {
-  max-width: 100%;
-  word-wrap: break-word;
-  box-sizing: border-box;
-}
-
-/* ==========================================
    IMPRESSÃO
    ========================================== */
 @media print {
@@ -3453,8 +3429,7 @@ td:has(.check-doc-individual:checked) {
   background: linear-gradient(90deg, #2563eb, #10b981);
 }
 
-/* Garantir que a secretária não veja Parecer Supervisão e Aprovar Termos */
-body.perfil-secretaria #btnGeradorDocumentos,
+/* Garantir que a secretária não veja Aprovar Termos */
 body.perfil-secretaria #btnAprovacaoTermos {
   display: none !important;
 }
