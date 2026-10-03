@@ -1206,21 +1206,34 @@ function aplicarFundoPorEscola(escola) {
 }
 
 // ------ ALTERNAR VISUALIZAÇÃO CARDS/LISTA ------
+// Marca qual das duas opções (Cards / Lista) está ativa no seletor
+function atualizarSeletorVisualizacao(modo) {
+  const cards = document.getElementById('btnVisCards');
+  const lista = document.getElementById('btnVisLista');
+  if (cards) { cards.classList.toggle('ativo', modo === 'cards'); cards.setAttribute('aria-pressed', modo === 'cards'); }
+  if (lista) { lista.classList.toggle('ativo', modo === 'lista'); lista.setAttribute('aria-pressed', modo === 'lista'); }
+}
+
+// Clique numa das opções do seletor: só troca se for diferente do modo atual
+// (na aba Profissionais o modo é guardado em outra variável)
+function selecionarVisualizacao(modo) {
+  const atual = (typeof abaAtiva !== 'undefined' && abaAtiva === 'profissionais')
+    ? modoVisualizacaoProf
+    : modoVisualizacao;
+  if (modo !== atual) alternarVisualizacao();
+}
+
 function alternarVisualizacao() {
-  const btn = document.getElementById('toggleVisualizacao');
   const lista = document.getElementById('lista');
   
   if (modoVisualizacao === 'cards') {
     modoVisualizacao = 'lista';
-    btn.classList.add('ativo');
-    btn.innerHTML = '<i class="fas fa-list"></i>';
     lista.classList.add('modo-lista');
   } else {
     modoVisualizacao = 'cards';
-    btn.classList.remove('ativo');
-    btn.innerHTML = '<i class="fas fa-th-large"></i>';
     lista.classList.remove('modo-lista');
   }
+  atualizarSeletorVisualizacao(modoVisualizacao);
   
   const inicio = (paginaAtual - 1) * alunosPorPagina;
   const alunosPagina = dadosFiltradosGlobais.slice(inicio, inicio + alunosPorPagina);
