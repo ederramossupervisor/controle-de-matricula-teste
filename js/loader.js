@@ -29,8 +29,6 @@
     'dashboard.js',
     'log.js',
     'termo.js',
-    'planotatico.js',
-    'gerador-documentos.js',
     'dados-escolas.js',
     'monitoramento.js',
     'orgs-curriculares.js',
