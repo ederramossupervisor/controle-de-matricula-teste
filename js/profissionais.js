@@ -127,6 +127,8 @@ function selecionarAba(aba) {
   document.getElementById('filtros-container').style.display = (aba === 'alunos') ? 'flex' : 'none';
   document.getElementById('filtros-profissionais-container').style.display = (aba === 'profissionais') ? 'flex' : 'none';
   document.getElementById('areaToggleVisualizacao').style.display = 'flex';
+  // o seletor Cards/Lista reflete o modo da aba que está abrindo
+  atualizarSeletorVisualizacao(aba === 'profissionais' ? modoVisualizacaoProf : modoVisualizacao);
 
   const colunaAlunos = document.getElementById('menuColunaAlunos');
   const colunaProfissionais = document.getElementById('menuColunaProfissionais');
@@ -139,16 +141,7 @@ function selecionarAba(aba) {
       modoVisualizacaoProf = (modoVisualizacaoProf === 'cards') ? 'lista' : 'cards';
       const lista = profissionaisFiltrados.length ? profissionaisFiltrados : profissionaisGlobais;
       renderListaProfissionais(lista);
-      const btn = document.getElementById('toggleVisualizacao');
-      if (btn) {
-        if (modoVisualizacaoProf === 'lista') {
-          btn.classList.add('ativo');
-          btn.innerHTML = '<i class="fas fa-list"></i>';
-        } else {
-          btn.classList.remove('ativo');
-          btn.innerHTML = '<i class="fas fa-th-large"></i>';
-        }
-      }
+      atualizarSeletorVisualizacao(modoVisualizacaoProf);
     };
   } else {
     if (window.alternarVisualizacaoOriginal) {
