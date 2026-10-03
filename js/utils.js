@@ -369,6 +369,25 @@ function getEscolasPermitidas() {
   return [];
 }
 
+// ------ SELEÇÃO DE ESCOLA ------
+// Supervisor e administrador não têm "uma" escola: escolhem entre as permitidas.
+// Secretaria/pedagógico trabalham sempre na escola do próprio usuário.
+function usuarioEscolheEscola() {
+  return perfilUsuario === 'SUPERVISOR' || emailUsuario === 'eder.ramos@educador.edu.es.gov.br';
+}
+
+// Preenche um <select> com as escolas que o usuário pode acessar.
+// Pré-seleciona a escola do usuário (se houver e for permitida) ou a única disponível.
+function preencherSelectEscolas(select, textoVazio) {
+  if (!select) return;
+  const escolas = getEscolasPermitidas().slice().sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
+  select.innerHTML = '';
+  select.appendChild(new Option(textoVazio || 'Selecione a escola', ''));
+  escolas.forEach(function (esc) { select.appendChild(new Option(esc, esc)); });
+  if (escolas.length === 1) select.value = escolas[0];
+  else if (escolaUsuario && escolas.includes(escolaUsuario)) select.value = escolaUsuario;
+}
+
 function aplicarMascaraData(input) {
   let valor = input.value.replace(/\D/g, '');
   if (valor.length > 8) valor = valor.slice(0, 8);
