@@ -4,7 +4,7 @@
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>const APP_VERSION = 'v3.1.0-sb13';</script>  
+<script>const APP_VERSION = 'v3.1.0-sb14';</script>  
 <script>
   // Se este arquivo foi aberto direto (atalho/favorito salvo aponta para
   // app_v2.html em vez da raiz do site), a rotina de limpeza de cache e
@@ -1411,11 +1411,14 @@
       </button>
     </div>
     <div style="display: flex; align-items: center; gap: 8px;" id="areaToggleVisualizacao">
-      <span style="font-size: 14px; color: var(--text-muted);">Cards</span>
-      <button id="toggleVisualizacao" class="toggle-switch" onclick="alternarVisualizacao()">
-        <i class="fas fa-th-large"></i>
-      </button>
-      <span style="font-size: 14px; color: var(--text-muted);">Lista</span>
+      <div id="toggleVisualizacao" class="abas-seletor seletor-visualizacao" role="group" aria-label="Modo de visualização">
+        <button type="button" id="btnVisCards" class="aba-item ativo" aria-pressed="true" onclick="selecionarVisualizacao('cards')">
+          <i class="fas fa-th-large"></i> Cards
+        </button>
+        <button type="button" id="btnVisLista" class="aba-item" aria-pressed="false" onclick="selecionarVisualizacao('lista')">
+          <i class="fas fa-list"></i> Lista
+        </button>
+      </div>
     </div>
   </div>
     
