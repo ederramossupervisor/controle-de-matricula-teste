@@ -161,6 +161,11 @@ function renderLista(dados) {
       ? `<div style="font-size:10px;color:#64748b;text-align:center;margin-top:4px;max-width:44px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${aluno.TURMA}">${aluno.TURMA}</div>`
       : '';
 
+    // Nome da escola, bem pequeno, logo abaixo do nome do aluno
+    const escolaCardHtml = aluno.ESCOLA
+      ? `<div style="font-size:10px;line-height:1.2;color:#64748b;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${aluno.ESCOLA}"><i class="fas fa-school" style="font-size:9px;margin-right:3px;"></i>${aluno.ESCOLA}</div>`
+      : '';
+
     // Container vertical para botões de ação (gap reduzido para 1px)
     let botoesAcaoHtml = '';
     if (perfilUsuario !== 'PEDAGOGICO') {
@@ -169,7 +174,10 @@ function renderLista(dados) {
 
     div.innerHTML = `
 <div style="display:flex;align-items:center;gap:8px;min-height:40px;margin-bottom:8px;">
-          <div style="flex:1;min-width:0;font-weight:600;color:#0f172a;font-size:15px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-align:${botoesAcaoHtml ? 'left' : 'center'};" title="${aluno.ALUNO || ''}">${aluno.ALUNO || 'Nome inválido'}</div>
+          <div style="flex:1;min-width:0;text-align:${botoesAcaoHtml ? 'left' : 'center'};">
+            <div style="font-weight:600;color:#0f172a;font-size:15px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;" title="${aluno.ALUNO || ''}">${aluno.ALUNO || 'Nome inválido'}</div>
+            ${escolaCardHtml}
+          </div>
           ${botoesAcaoHtml}
         </div>
       <div style="display:flex; align-items:center; gap:12px;">
