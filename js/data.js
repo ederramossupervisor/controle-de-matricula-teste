@@ -586,7 +586,7 @@ let _modelosEscolaCache = [];
 
 function carregarModelosEscola() {
   mostrarLoading();
-  const url = `${API_URL}?tipo=listarModelosEscola&email=${emailUsuario}&_=${new Date().getTime()}`;
+  const url = `${API_URL}?tipo=listarModelosEscola&email=${emailUsuario}${escolaModelosParam()}&_=${new Date().getTime()}`;
   jsonp(url, function(modelos) {
     esconderLoading();
     const select = document.getElementById("selectModeloVisualizar");
@@ -668,6 +668,9 @@ async function fazerUploadModeloEscola() {
   if (!file) { mostrarToast('Selecione um arquivo.', 'warning'); return; }
   if (file.size > 20 * 1024 * 1024) { mostrarToast('Arquivo muito grande. Máximo 20 MB.', 'warning'); return; }
 
+  const escolaModelo = escolaModelosSelecionada();
+  if (usuarioEscolheEscola() && !escolaModelo) { mostrarToast('Selecione a escola do modelo.', 'warning'); return; }
+
   const btnEnviar = document.querySelector('#abaUploadModeloEscola .btn-salvar');
   showButtonLoading(btnEnviar);
 
@@ -682,6 +685,7 @@ async function fazerUploadModeloEscola() {
     postSemResposta({
       acao: 'uploadModeloEscola',
       email: emailUsuario,
+      escola: escolaModelo,
       nomeModelo: nomeModelo,
       fileName: file.name,
       mimeType: file.type,
@@ -1524,10 +1528,21 @@ async function salvarAluno() {
     }
   }
 
+  // Supervisor/administrador escolhem a escola; secretaria usa a sua
+  let escolaNovoAluno = escolaUsuario;
+  if (usuarioEscolheEscola()) {
+    escolaNovoAluno = document.getElementById("selectEscolaNovoAluno")?.value || "";
+    if (!escolaNovoAluno) {
+      mostrarToast("Selecione a escola do aluno.", "warning");
+      return;
+    }
+  }
+
   showButtonLoading(btnSalvar);
 
   const dados = {
     acao: "cadastrarAluno",
+    escola: escolaNovoAluno,
     nome: nome,
     idAluno: idAluno,
     responsavel: responsavel,
