@@ -583,7 +583,34 @@ function abrirModalModelos() {
     abaUploadBtn.style.display = "none";
   }
   
+  // Supervisor/administrador escolhem de qual escola são os modelos próprios
+  const wrapperEscolaModelos = document.getElementById('wrapperEscolaModelos');
+  if (wrapperEscolaModelos) {
+    if (usuarioEscolheEscola()) {
+      wrapperEscolaModelos.style.display = '';
+      preencherSelectEscolas(document.getElementById('selectEscolaModelos'), 'Escola (modelos próprios)');
+    } else {
+      wrapperEscolaModelos.style.display = 'none';
+    }
+  }
+
   mostrarAbaListarModelos();
+}
+
+function escolaModelosSelecionada() {
+  if (!usuarioEscolheEscola()) return '';
+  return document.getElementById('selectEscolaModelos')?.value || '';
+}
+
+function escolaModelosParam() {
+  const e = escolaModelosSelecionada();
+  return e ? `&escola=${encodeURIComponent(e)}` : '';
+}
+
+function aoMudarEscolaModelos() {
+  carregarModelosEscola();
+  const abaUp = document.getElementById('abaUploadModeloEscola');
+  if (abaUp && abaUp.style.display !== 'none') preencherDatalistModelosExistentes();
 }
 
 function mostrarAbaUploadModeloEscola() {
@@ -596,7 +623,7 @@ function mostrarAbaUploadModeloEscola() {
 function preencherDatalistModelosExistentes() {
   const datalist = document.getElementById('listaModelosExistentes');
   if (!datalist) return;
-  const url = `${API_URL}?tipo=listarModelosEscola&email=${emailUsuario}&_=${new Date().getTime()}`;
+  const url = `${API_URL}?tipo=listarModelosEscola&email=${emailUsuario}${escolaModelosParam()}&_=${new Date().getTime()}`;
   jsonp(url, function(modelos) {
     datalist.innerHTML = '';
     if (!Array.isArray(modelos)) return;
@@ -640,6 +667,12 @@ function preencherSelectTipoModelo() {
 function abrirModalDocumentos() {
   document.getElementById("modalDocumentos").style.display = "flex";
   preencherSelectEscolasDoc();   // ← chamada movida para cá
+  // Ao trocar a escola, recarrega os tipos de documento daquela escola (supervisor/admin)
+  const selUploadEscola = document.getElementById('uploadEscola');
+  if (selUploadEscola && !selUploadEscola._tiposHook) {
+    selUploadEscola._tiposHook = true;
+    selUploadEscola.addEventListener('change', carregarTiposDocumento);
+  }
   mostrarAbaUpload();
   ativarEnterNoModal('#modalDocumentos', buscarDocumentos);
 }
@@ -658,7 +691,9 @@ function carregarTiposDocumento() {
   const select = document.getElementById('uploadTipoDoc');
   if (!select) return;
 
-  const url = `${API_URL}?tipo=listarTiposDocumento&email=${emailUsuario}`;
+  // Supervisor/administrador: os tipos personalizados são os da escola escolhida no formulário
+  const escolaTipos = usuarioEscolheEscola() ? (document.getElementById('uploadEscola')?.value || '') : '';
+  const url = `${API_URL}?tipo=listarTiposDocumento&email=${emailUsuario}&escola=${encodeURIComponent(escolaTipos)}`;
   jsonp(url, function(tipos) {
     select.innerHTML = '<option value="">Tipo de documento</option>';
     if (Array.isArray(tipos)) {
@@ -680,9 +715,16 @@ function carregarTiposDocumento() {
       if (this.value === '__novo__') {
         const novoTipo = prompt('Digite o nome do novo tipo de documento:');
         if (novoTipo && novoTipo.trim()) {
+          const escolaNovoTipo = usuarioEscolheEscola() ? (document.getElementById('uploadEscola')?.value || '') : '';
+          if (usuarioEscolheEscola() && !escolaNovoTipo) {
+            mostrarToast('Selecione a escola antes de cadastrar um novo tipo.', 'warning');
+            select.value = '';
+            return;
+          }
           postSemResposta({
             acao: 'cadastrarTipoDocumento',
             email: emailUsuario,
+            escola: escolaNovoTipo,
             tipo: novoTipo.trim()
           }, 'Tipo cadastrado!', () => {
             carregarTiposDocumento(); // recarrega a lista
@@ -845,38 +887,90 @@ function fecharModalExportacao() {
 }
 
 // ------ MODAL CHECKLIST EM LOTE ------
+let escolaChecklist = '';
+
+// Mostra a escola do checklist: texto fixo (secretaria) ou seletor (supervisor/administrador)
+function definirEscolaChecklist(escola) {
+  escolaChecklist = escola || '';
+  const info = document.getElementById('infoEscolaChecklist');
+  const wrapper = document.getElementById('wrapperEscolaChecklist');
+  const sel = document.getElementById('selectEscolaChecklist');
+  const span = document.getElementById('escolaAtualChecklist');
+
+  if (usuarioEscolheEscola() && sel) {
+    if (info) info.style.display = 'none';
+    if (wrapper) wrapper.style.display = '';
+    if (sel.options.length <= 1) preencherSelectEscolas(sel);
+    if (escola && !Array.from(sel.options).some(o => o.value === escola)) sel.appendChild(new Option(escola, escola));
+    sel.value = escola || '';
+  } else {
+    if (info) info.style.display = '';
+    if (wrapper) wrapper.style.display = 'none';
+    if (span) span.textContent = escola || '';
+  }
+}
+
+function carregarTurmasChecklist(escola) {
+  const select = document.getElementById("selectTurmaChecklist");
+  select.innerHTML = '<option value="">Carregando turmas...</option>';
+  jsonp(`${API_URL}?tipo=turmas&email=${emailUsuario}&escola=${encodeURIComponent(escola)}`, function(turmas) {
+    if (escola !== escolaChecklist) return; // a pessoa já trocou de escola
+    select.innerHTML = '<option value="">Selecione uma turma</option>';
+    (Array.isArray(turmas) ? turmas : []).forEach(t => {
+      const opt = document.createElement("option");
+      opt.value = t.turma;
+      opt.textContent = t.turma;
+      select.appendChild(opt);
+    });
+  });
+}
+
 function abrirModalChecklistLote() {
   if (perfilUsuario === 'PEDAGOGICO') {
     mostrarToast('Perfil pedagógico não pode acessar checklist em lote.', 'warning');
     return;
   }
   document.getElementById("modalChecklistLote").style.display = "flex";
-  document.getElementById("escolaAtualChecklist").textContent = escolaUsuario;
-  
+
   const select = document.getElementById("selectTurmaChecklist");
-  select.innerHTML = '<option value="">Selecione uma turma</option>';
-  
-  const turmasDaEscola = turmasDisponiveis.filter(t => t.escola === escolaUsuario);
-  if (turmasDaEscola.length === 0) {
-    carregarTurmas(escolaUsuario).then(() => {
-      const turmas = turmasGlobais.filter(t => t.escola === escolaUsuario);
-      turmas.forEach(t => {
-        const opt = document.createElement("option");
-        opt.value = t.turma;
-        opt.textContent = t.turma;
-        select.appendChild(opt);
-      });
-    });
+  const container = document.getElementById("listaChecklistContainer");
+
+  if (usuarioEscolheEscola()) {
+    // Supervisor/administrador: escolhe a escola (começa na do usuário, se houver)
+    const sel = document.getElementById('selectEscolaChecklist');
+    preencherSelectEscolas(sel);
+    definirEscolaChecklist(sel.value);
   } else {
-    turmasDaEscola.forEach(t => {
-      const opt = document.createElement("option");
-      opt.value = t.turma;
-      opt.textContent = t.turma;
-      select.appendChild(opt);
-    });
+    // Secretaria: sempre a própria escola
+    definirEscolaChecklist(escolaUsuario);
   }
-  
-  document.getElementById("listaChecklistContainer").innerHTML = '<p style="padding:20px; text-align:center;">Selecione uma turma...</p>';
+
+  if (escolaChecklist) {
+    carregarTurmasChecklist(escolaChecklist);
+    container.innerHTML = '<p style="padding:20px; text-align:center;">Selecione uma turma...</p>';
+  } else {
+    select.innerHTML = '<option value="">Selecione a escola primeiro</option>';
+    container.innerHTML = '<p style="padding:20px; text-align:center;">Selecione uma escola...</p>';
+  }
+}
+
+function aoMudarEscolaChecklist() {
+  const sel = document.getElementById('selectEscolaChecklist');
+  const nova = sel.value;
+  if (nova === escolaChecklist) return;
+  if (checklistTemAlteracoes() && !confirm('Você tem alterações não salvas. Deseja trocar de escola mesmo assim?')) {
+    sel.value = escolaChecklist;
+    return;
+  }
+  escolaChecklist = nova;
+  const container = document.getElementById("listaChecklistContainer");
+  if (!nova) {
+    document.getElementById("selectTurmaChecklist").innerHTML = '<option value="">Selecione a escola primeiro</option>';
+    container.innerHTML = '<p style="padding:20px; text-align:center;">Selecione uma escola...</p>';
+    return;
+  }
+  container.innerHTML = '<p style="padding:20px; text-align:center;">Selecione uma turma...</p>';
+  carregarTurmasChecklist(nova);
 }
 
 // Função auxiliar: verifica se alguma checkbox do checklist foi alterada
@@ -903,8 +997,13 @@ function fecharModalChecklistLote() {
 
 async function carregarAlunosParaChecklist() {
   const turmaSelecionada = document.getElementById("selectTurmaChecklist").value;
+  const escolaSelecionada = escolaChecklist;
   const container = document.getElementById("listaChecklistContainer");
 
+  if (!escolaSelecionada) {
+    container.innerHTML = '<p style="padding:20px; text-align:center;">Selecione uma escola...</p>';
+    return;
+  }
   if (!turmaSelecionada) {
     container.innerHTML = '<p style="padding:20px; text-align:center;">Selecione uma turma...</p>';
     return;
@@ -912,9 +1011,18 @@ async function carregarAlunosParaChecklist() {
 
   mostrarLoading();
 
-  let url = `${API_URL}?email=${emailUsuario}&turma=${encodeURIComponent(turmaSelecionada)}&limite=1000`;
-
-  jsonp(url, function(dados) {
+  // Busca no Supabase (mesma origem dos cards), filtrando por escola + turma
+  buscarDadosAlunosSb(1, { escola: escolaSelecionada, turma: turmaSelecionada, situacao: 'Ativo' }, 1000).then(function(dados) {
+    // descarta resposta antiga se a pessoa já trocou de escola/turma
+    if (escolaSelecionada !== escolaChecklist || turmaSelecionada !== document.getElementById("selectTurmaChecklist").value) {
+      esconderLoading();
+      return;
+    }
+    if (!dados || dados.erro || !Array.isArray(dados.alunos)) {
+      esconderLoading();
+      container.innerHTML = '<p style="padding:20px; text-align:center;">Não foi possível carregar os alunos. Tente novamente.</p>';
+      return;
+    }
     const alunos = dados.alunos.filter(a => a.SITUACAO === "Ativo");
 
     if (alunos.length === 0) {
@@ -998,10 +1106,32 @@ function abrirNovoAluno() {
   document.getElementById("novoAluno").style.display = "flex";
   document.getElementById("lista").style.display = "none";
   document.getElementById("painel").style.display = "none";
-  document.getElementById("escolaVinculada").textContent = 
-    `Aluno será matriculado em: ${escolaUsuario}`;
-  carregarTurmasParaCadastro(escolaUsuario);
+  const infoEscolaNA = document.getElementById("infoEscolaCadastro");
+  const wrapperEscolaNA = document.getElementById("wrapperEscolaNovoAluno");
+  if (usuarioEscolheEscola()) {
+    // Supervisor/administrador: escolhe em qual escola matricular
+    if (infoEscolaNA) infoEscolaNA.style.display = "none";
+    if (wrapperEscolaNA) wrapperEscolaNA.style.display = "";
+    const selEscolaNA = document.getElementById("selectEscolaNovoAluno");
+    preencherSelectEscolas(selEscolaNA);
+    aoMudarEscolaNovoAluno();
+  } else {
+    // Secretaria: sempre a própria escola
+    if (infoEscolaNA) infoEscolaNA.style.display = "";
+    if (wrapperEscolaNA) wrapperEscolaNA.style.display = "none";
+    document.getElementById("escolaVinculada").textContent = `Aluno será matriculado em: ${escolaUsuario}`;
+    carregarTurmasParaCadastro(escolaUsuario);
+  }
 }
+function aoMudarEscolaNovoAluno() {
+  const escola = document.getElementById("selectEscolaNovoAluno").value;
+  if (escola) {
+    carregarTurmasParaCadastro(escola);
+  } else {
+    document.getElementById("selectTurmaAluno").innerHTML = '<option value="">Selecione a escola primeiro</option>';
+  }
+}
+
 function voltarApp() {
   // 🔓 Restaura o scroll do body
   const scrollY = document.body.style.top;
