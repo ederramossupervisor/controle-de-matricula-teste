@@ -40,6 +40,8 @@ function renderLista(dados) {
     if (aluno.STATUS && aluno.STATUS.includes("✅")) statusClass = "status-completo";
     else if (aluno.STATUS && aluno.STATUS.includes("⚠️")) statusClass = "status-pendente";
     else if (aluno.STATUS && aluno.STATUS.includes("🔴")) statusClass = "status-vencido";
+    // No Supabase o STATUS vem só como Completo/Pendente; o vencido vem em ALERTA
+    if (aluno.STATUS !== "✅ Completo" && aluno.ALERTA === "🔴 Vencido") statusClass = "status-vencido";
 
     div.className = "fade " + statusClass;
 
@@ -71,6 +73,21 @@ function renderLista(dados) {
         prazoTexto = "Sem prazo";
         prazoClasse = "";
       }
+    }
+
+    // Card vermelho: tooltip com há quantos dias está vencido
+    if (statusClass === "status-vencido") {
+      div.classList.add("card-vencido");
+      let diasVencido = null;
+      if (aluno.PRAZO_FINAL) {
+        const h = new Date(); h.setHours(0,0,0,0);
+        const p = new Date(aluno.PRAZO_FINAL); p.setHours(0,0,0,0);
+        const d = Math.round((h - p) / (1000*60*60*24));
+        if (d > 0) diasVencido = d;
+      }
+      div.setAttribute("data-tooltip", diasVencido === null
+        ? "Prazo vencido"
+        : `Vencido há ${diasVencido} ${diasVencido === 1 ? "dia" : "dias"}`);
     }
 
     // Ícones de documentos
@@ -188,10 +205,6 @@ function renderLista(dados) {
         <div style="flex:1;min-width:0;">
           ${aluno.SITUACAO && aluno.SITUACAO !== 'Ativo' ? `<div style="font-size:11px; color:#dc2626; margin-bottom:4px;"><i class="fas fa-thumbtack"></i> ${aluno.SITUACAO}</div>` : ''}
           ${docsIconsHtml}
-          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
-            <span class="status-badge ${statusClass}" style="padding:2px 8px;border-radius:40px;font-size:11px;font-weight:500;">${aluno.STATUS}</span>
-            ${prazoTexto ? `<span class="prazo-info ${prazoClasse}" style="display:flex;align-items:center;gap:4px;font-size:12px;color:#64748b;"><i class="fas fa-hourglass-half"></i> ${prazoTexto}</span>` : ''}
-          </div>
         </div>
       </div>
     `;
@@ -286,31 +299,6 @@ function renderLista(dados) {
       abrirAluno(aluno._row);
     });
 
-    // Botão lápis (editar) no canto inferior direito
-    const btnLapis = document.createElement('button');
-    btnLapis.className = 'btn-icone';
-    btnLapis.setAttribute('data-tooltip', 'Abrir ficha do aluno');
-    btnLapis.innerHTML = '<i class="fa-regular fa-pen-to-square"></i>';
-    btnLapis.style.cssText = `
-      position: absolute;
-      bottom: 8px;
-      right: 8px;
-      width: 28px;
-      height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #64748b;
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      z-index: 5;
-    `;
-    btnLapis.addEventListener('click', (e) => {
-      e.stopPropagation();
-      abrirAluno(aluno._row);
-    });
-    div.appendChild(btnLapis);
 
     // Preencher o container vertical de ações (WhatsApp, Histórico, PDF)
     if (perfilUsuario !== 'PEDAGOGICO') {
