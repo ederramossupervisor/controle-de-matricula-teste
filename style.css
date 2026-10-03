@@ -711,6 +711,18 @@ button:active { transform: scale(0.98); }
 .status-pendente { border-left-color: #f59e0b !important; }
 .status-vencido  { border-left-color: #ef4444 !important; }
 
+/* Cards de aluno: o status é indicado só pela cor (faixa + leve tom de fundo) */
+#lista > div.status-completo { background-image: linear-gradient(rgba(16,185,129,0.10), rgba(16,185,129,0.10)); }
+#lista > div.status-pendente { background-image: linear-gradient(rgba(245,158,11,0.12), rgba(245,158,11,0.12)); }
+#lista > div.status-vencido  { background-image: linear-gradient(rgba(239,68,68,0.13), rgba(239,68,68,0.13)); }
+#lista > div.status-completo,
+#lista > div.status-pendente,
+#lista > div.status-vencido { border-left-width: 5px !important; }
+/* Tooltip do card vencido: some quando o mouse está sobre um ícone que tem tooltip próprio */
+#lista > div.card-vencido { cursor: default; }
+#lista > div.card-vencido:has([data-tooltip]:hover):before,
+#lista > div.card-vencido:has([data-tooltip]:hover):after { visibility: hidden; opacity: 0; }
+
 /* Avatar */
 .aluno-avatar {
   width: 44px;
