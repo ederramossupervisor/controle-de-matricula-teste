@@ -415,10 +415,13 @@ function camposDoAluno(d) {
 const ACAO_ALUNO_SB = {
   async cadastrarAluno(d) {
     const perfil = await carregarPerfilSb();
-    if (!perfil || !perfil.escola) throw new Error('Seu usuário não está vinculado a uma escola.');
+    // supervisor/administrador escolhem a escola; secretaria usa a dela (o banco confere a permissão)
+    const escolheEscola = !!perfil && (perfil.is_admin || (perfil.perfis || []).includes('SUPERVISOR'));
+    const escolaAluno = (escolheEscola && d.escola) ? d.escola : (perfil && perfil.escola);
+    if (!escolaAluno) throw new Error(escolheEscola ? 'Selecione a escola do aluno.' : 'Seu usuário não está vinculado a uma escola.');
     const dm = paraDataIso(d.dataMatricula) || hojeSaoPaulo();
     const linha = Object.assign({
-      escola: perfil.escola,
+      escola: escolaAluno,
       data_matricula: dm,
       prazo_final: somarDias(dm, 30)
     }, camposDoAluno(d));
@@ -855,11 +858,13 @@ async function listarModelosSb() {
   return lista;
 }
 
-async function listarModelosEscolaSb() {
+async function listarModelosEscolaSb(u) {
   const p = await carregarPerfilSb();
   const oficiais = await listarModelosSb();
-  if (!p.escola) return oficiais;
-  const { data, error } = await sb.from('modelos_escolas').select('*').eq('escola', p.escola).order('nome_modelo');
+  const escolheEscola = p.is_admin || (p.perfis || []).includes('SUPERVISOR');
+  const escola = escolheEscola ? ((u && u.searchParams.get('escola')) || '') : p.escola;
+  if (!escola) return oficiais;
+  const { data, error } = await sb.from('modelos_escolas').select('*').eq('escola', escola).order('nome_modelo');
   if (error) throw error;
   const links = await linksArquivosSb('modelos', data);
   const proprios = data.map(function (m, i) {
@@ -1065,12 +1070,14 @@ const ROTAS_JSONP_SB = {
     const extra = await tiposPersonalizadosSb('processos_tipos', u.searchParams.get('escola') || p.escola);
     return Array.from(new Set(TIPOS_PROCESSO_FIXOS.concat(extra)));
   },
-  listarTiposDocumento: async function () {
+  listarTiposDocumento: async function (u) {
     const p = await carregarPerfilSb();
-    return TIPOS_DOCUMENTO_FIXOS.concat(await tiposPersonalizadosSb('documentos_tipos', p.escola));
+    const escolheEscola = p.is_admin || (p.perfis || []).includes('SUPERVISOR');
+    const escola = escolheEscola ? (u.searchParams.get('escola') || '') : p.escola;
+    return TIPOS_DOCUMENTO_FIXOS.concat(await tiposPersonalizadosSb('documentos_tipos', escola));
   },
   modelos: function () { return listarModelosSb(); },
-  listarModelosEscola: function () { return listarModelosEscolaSb(); },
+  listarModelosEscola: function (u) { return listarModelosEscolaSb(u); },
   dashboard: function (u) { return rpcSb('dashboard_pendencias', { p_escola: u.searchParams.get('escola') || null }); },
   desempenho: function (u) { return rpcSb('desempenho', { p_escola: u.searchParams.get('escola') || null }); },
   rankingCache: function () { return rpcSb('ranking_escolas'); },
@@ -1578,10 +1585,12 @@ Object.assign(ACAO_ALUNO_SB, {
 
   async cadastrarTipoDocumento(d) {
     const p = await carregarPerfilSb();
-    if (!p.escola) throw new Error('Seu usuário não está vinculado a uma escola.');
+    const escolheEscola = p.is_admin || (p.perfis || []).includes('SUPERVISOR');
+    const escola = escolheEscola ? (d.escola || '') : p.escola;
+    if (!escola) throw new Error(escolheEscola ? 'Selecione a escola.' : 'Seu usuário não está vinculado a uma escola.');
     const tipo = (d.tipo || '').trim();
     if (!tipo) throw new Error('Nome do tipo é obrigatório.');
-    const { error } = await sb.from('documentos_tipos').upsert({ escola: p.escola, tipo: tipo }, { onConflict: 'escola,tipo', ignoreDuplicates: true });
+    const { error } = await sb.from('documentos_tipos').upsert({ escola: escola, tipo: tipo }, { onConflict: 'escola,tipo', ignoreDuplicates: true });
     if (error) throw error;
   },
 
@@ -1604,14 +1613,16 @@ Object.assign(ACAO_ALUNO_SB, {
 
   async uploadModeloEscola(d) {
     const p = await carregarPerfilSb();
-    if (!p.escola) throw new Error('Seu usuário não está vinculado a uma escola.');
+    const escolheEscola = p.is_admin || (p.perfis || []).includes('SUPERVISOR');
+    const escolaModelo = escolheEscola ? (d.escola || '') : p.escola;
+    if (!escolaModelo) throw new Error(escolheEscola ? 'Selecione a escola do modelo.' : 'Seu usuário não está vinculado a uma escola.');
     if (!txtOuNulo(d.nomeModelo) || !d.fileBase64 || !d.fileName) throw new Error('Nome e arquivo são obrigatórios.');
-    const slug = await slugEscolaSb(p.escola);
+    const slug = await slugEscolaSb(escolaModelo);
     const caminho = slug + '/' + Date.now() + '_' + nomeSeguroArquivo(d.fileName);
     const up = await sb.storage.from('modelos').upload(caminho, base64ParaBlob(d.fileBase64, d.mimeType), { contentType: d.mimeType || 'application/octet-stream', upsert: false });
     if (up.error) throw up.error;
     const { error } = await sb.from('modelos_escolas').insert({
-      escola: p.escola, nome_modelo: d.nomeModelo.trim(), arquivo_path: caminho, arquivo_nome: d.fileName
+      escola: escolaModelo, nome_modelo: d.nomeModelo.trim(), arquivo_path: caminho, arquivo_nome: d.fileName
     });
     if (error) { await sb.storage.from('modelos').remove([caminho]); throw error; }
   },
