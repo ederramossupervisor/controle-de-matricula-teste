@@ -4,7 +4,7 @@
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>const APP_VERSION = 'v3.1.0-sb10';</script>  
+<script>const APP_VERSION = 'v3.1.0-sb11';</script>  
 <script>
   // Se este arquivo foi aberto direto (atalho/favorito salvo aponta para
   // app_v2.html em vez da raiz do site), a rotina de limpeza de cache e
@@ -144,6 +144,13 @@
           <div class="info-escola" id="infoEscolaCadastro">
             <span><i class="fas fa-school"></i></span>
             <span id="escolaVinculada">Carregando...</span>
+          </div>
+          <!-- Supervisor/administrador escolhem a escola; secretaria vê só a sua (acima) -->
+          <div class="input-icon" id="wrapperEscolaNovoAluno" style="display:none;">
+            <span class="icon"><i class="fas fa-school"></i></span>
+            <select id="selectEscolaNovoAluno" onchange="aoMudarEscolaNovoAluno()">
+              <option value="">Selecione a escola</option>
+            </select>
           </div>
   
           <div class="input-icon">
@@ -1479,6 +1486,13 @@
           <button class="close-btn" onclick="fecharModalModelos()"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
+          <!-- Escola dos modelos próprios (só supervisor/administrador) -->
+          <div class="input-icon" id="wrapperEscolaModelos" style="display:none; margin-bottom:12px;">
+            <span class="icon"><i class="fas fa-school"></i></span>
+            <select id="selectEscolaModelos" onchange="aoMudarEscolaModelos()">
+              <option value="">Escola (modelos próprios)</option>
+            </select>
+          </div>
           <!-- Abas: apenas para Admin aparece Upload -->
           <div id="abasModelos" style="display: flex; gap: 10px; margin-bottom: 20px;">
             <button class="btn-pequeno" id="abaListarModelosBtn" onclick="mostrarAbaListarModelos()"><i class="fas fa-list"></i> Modelos Disponíveis</button>
@@ -1783,8 +1797,15 @@
           <button class="close-btn" onclick="fecharModalChecklistLote()"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
-          <div class="info-escola">
+          <div class="info-escola" id="infoEscolaChecklist">
             <i class="fas fa-school"></i> <span id="escolaAtualChecklist"></span>
+          </div>
+          <!-- Supervisor/administrador escolhem a escola; secretaria vê só a sua (acima) -->
+          <div class="input-icon" id="wrapperEscolaChecklist" style="display:none;">
+            <span class="icon"><i class="fas fa-school"></i></span>
+            <select id="selectEscolaChecklist" onchange="aoMudarEscolaChecklist()">
+              <option value="">Selecione a escola</option>
+            </select>
           </div>
 
           <div class="input-icon">
