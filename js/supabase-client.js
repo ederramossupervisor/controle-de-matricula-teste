@@ -975,6 +975,48 @@ async function importarProfissionaisSb(linhasCsv) {
   return r;
 }
 
+// ------------------------------------------------------------
+// FOTO DE PERFIL E MONITORAMENTO DE VISITAS
+// ------------------------------------------------------------
+async function fotoPerfilSb() {
+  const p = await carregarPerfilSb();
+  const { data, error } = await sb.from('usuarios').select('foto_path, foto_drive_id').eq('id', p.id).maybeSingle();
+  if (error) throw error;
+  if (!data) return { url: '' };
+  if (data.foto_path) {
+    const r = await sb.storage.from('fotos-perfil').createSignedUrl(data.foto_path, 3600);
+    return { url: r.data ? r.data.signedUrl : '' };
+  }
+  return { url: data.foto_drive_id ? 'https://drive.google.com/thumbnail?id=' + data.foto_drive_id + '&sz=w200' : '' };
+}
+
+async function historicoMonitoramentoSb(u) {
+  let q = sb.from('monitoramento_visitas').select('*');
+  const escola = u.searchParams.get('escola');
+  if (escola) q = q.eq('escola', escola);
+  const { data, error } = await q.order('data_visita', { ascending: false });
+  if (error) throw error;
+  return data.map(function (v) {
+    return { id: v.id, escola: v.escola, supervisor: v.supervisor, data: v.data_visita, obsGerais: v.obs_gerais || '', finalizada: v.finalizada === true, itens: [] };
+  });
+}
+
+async function detalhesMonitoramentoSb(u) {
+  const id = u.searchParams.get('idVisita');
+  const { data: v, error } = await sb.from('monitoramento_visitas').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  if (!v) return { erro: 'Visita não encontrada' };
+  const { data: itens, error: e2 } = await sb.from('monitoramento_itens').select('*, monitoramento_anexos(id)').eq('visita_id', id).order('item_id');
+  if (e2) throw e2;
+  return {
+    cabecalho: { escola: v.escola, supervisor: v.supervisor, data: v.data_visita, obsGerais: v.obs_gerais || '' },
+    itens: itens.map(function (i) {
+      return { id: i.item_id, categoria: i.categoria || '', descricao: i.descricao || '', status: i.status || '', obs: i.obs || '',
+        anexos: (i.monitoramento_anexos || []).map(function (a) { return a.id; }) };
+    })
+  };
+}
+
 const _jsonpLegado = jsonp;
 const ROTAS_JSONP_SB = {
   verificarConsentimento: function () { return consentimentoSb(); },
@@ -1002,6 +1044,9 @@ const ROTAS_JSONP_SB = {
   listarDadosEscolas: function () { return listarDadosEscolasSb(); },
   listarOrganizacoesCurriculares: function (u) { return listarOrgsSb(u.searchParams.get('escola') || ''); },
   atos: function (u) { return listarAtosSb(u); },
+  fotoPerfil: function () { return fotoPerfilSb(); },
+  historicoMonitoramento: function (u) { return historicoMonitoramentoSb(u); },
+  detalhesMonitoramento: function (u) { return detalhesMonitoramentoSb(u); },
   // Histórico escolar: gerado pelo Apps Script, que consulta o Supabase com o login desta pessoa
   gerarHistorico: function (u) {
     return new Promise(async function (resolve, reject) {
@@ -1593,6 +1638,53 @@ Object.assign(ACAO_ALUNO_SB, {
   async uploadFotoAluno(d) { await guardarArquivoAlunoSb(d, 'foto', 'foto'); },
   async uploadTermoResponsabilidade(d) { await guardarArquivoAlunoSb(d, 'termo_resp', 'termo'); },
   async uploadDeclaracaoEdEspecial(d) { await guardarArquivoAlunoSb(d, 'decl_ed_especial', 'declaracao'); }
+});
+
+Object.assign(ACAO_ALUNO_SB, {
+  async uploadFotoPerfil(d) {
+    if (!d.fileBase64) throw new Error('Arquivo não informado.');
+    const p = await carregarPerfilSb();
+    const antigo = p.foto_path;
+    const caminho = p.id + '/perfil_' + Date.now() + '.jpg';
+    const tipo = d.mimeType || 'image/jpeg';
+    const up = await sb.storage.from('fotos-perfil').upload(caminho, base64ParaBlob(d.fileBase64, tipo), { contentType: tipo, upsert: false });
+    if (up.error) throw up.error;
+    const r = await sb.rpc('definir_foto_perfil', { p_path: caminho });
+    if (r.error) { await sb.storage.from('fotos-perfil').remove([caminho]); throw r.error; }
+    if (antigo) await sb.storage.from('fotos-perfil').remove([antigo]);
+    await carregarPerfilSb(true);
+  },
+
+  async salvarMonitoramento(d) {
+    const p = await carregarPerfilSb();
+    if (!p.is_admin && !(p.perfis || []).includes('SUPERVISOR')) throw new Error('Apenas supervisores registram visitas.');
+    if (!d.escola || !d.idVisita || !Array.isArray(d.itens)) throw new Error('Dados da visita incompletos.');
+
+    const v = await sb.from('monitoramento_visitas').upsert({
+      id: d.idVisita, escola: d.escola, obs_gerais: txtOuNulo(d.obsGerais),
+      finalizada: d.finalizar === true, data_visita: new Date().toISOString()
+    }, { onConflict: 'id' });
+    if (v.error) throw v.error;
+
+    const linhas = d.itens.map(function (i) {
+      return { visita_id: d.idVisita, item_id: String(i.id), categoria: txtOuNulo(i.categoria), descricao: txtOuNulo(i.descricao),
+        status: txtOuNulo(i.status), obs: txtOuNulo(i.obs) };
+    });
+    const it = await sb.from('monitoramento_itens').upsert(linhas, { onConflict: 'visita_id,item_id' }).select('id, item_id');
+    if (it.error) throw it.error;
+    const uuidPorItem = {};
+    it.data.forEach(function (x) { uuidPorItem[x.item_id] = x.id; });
+
+    for (const i of d.itens) {
+      for (const a of (i.anexos || [])) {
+        const caminho = d.idVisita + '/' + nomeSeguroArquivo(String(i.id)) + '/' + Date.now() + '_' + nomeSeguroArquivo(a.fileName);
+        const up = await sb.storage.from('monitoramento').upload(caminho, base64ParaBlob(a.base64, a.mimeType), { contentType: a.mimeType || 'application/octet-stream', upsert: false });
+        if (up.error) throw up.error;
+        const ins = await sb.from('monitoramento_anexos').insert({ item_uuid: uuidPorItem[String(i.id)], arquivo_path: caminho, nome: a.fileName });
+        if (ins.error) { await sb.storage.from('monitoramento').remove([caminho]); throw ins.error; }
+      }
+    }
+  }
 });
 
 // Ações ainda não migradas: bloqueadas para NÃO gravar na planilha por engano

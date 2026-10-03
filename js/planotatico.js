@@ -25,10 +25,6 @@ function abrirModalPlanoTaticoMensal() {
   document.getElementById('planoTaticoMes').onchange = function() {
     carregarDadosMensais();
   };
-  // Supervisor: ao trocar a escola, recarrega os dados do mês selecionado
-  document.getElementById('planoTaticoEscola').onchange = function() {
-    carregarDadosMensais();
-  };
 }
 
 function carregarDadosMensais() {
@@ -36,13 +32,7 @@ function carregarDadosMensais() {
   if (!mes) return;
 
   mostrarLoading();
-  let urlMensal = `${API_URL}?tipo=indicadoresMensais&email=${encodeURIComponent(emailUsuario)}`;
-  if (perfilUsuario === 'SUPERVISOR') {
-    const escolaSel = document.getElementById('planoTaticoEscola').value;
-    if (!escolaSel) { esconderLoading(); return; }
-    urlMensal += `&escola=${encodeURIComponent(escolaSel)}`;
-  }
-  jsonp(urlMensal, function(dados) {
+  jsonp(`${API_URL}?tipo=indicadoresMensais&email=${encodeURIComponent(emailUsuario)}`, function(dados) {
     esconderLoading();
     if (dados && dados.meses && dados.meses[mes]) {
       const info = dados.meses[mes];
@@ -109,7 +99,7 @@ async function salvarPlanoTaticoMensal() {
     acao: 'salvarIndicadorMensalFrequencia',
     email: emailUsuario,
     mes: mes,
-    frequencia: frequencia,
+    frequencia: frequencia || '0',
     tutoria: tutoria || '',
     escola: escola
   };
@@ -197,10 +187,6 @@ function abrirModalPlanoTaticoTrimestral() {
   document.getElementById('planoTaticoTrimestre').onchange = function() {
     carregarDadosTrimestrais();
   };
-  // Supervisor: ao trocar a escola, recarrega os dados do trimestre selecionado
-  document.getElementById('planoTaticoTrimEscola').onchange = function() {
-    carregarDadosTrimestrais();
-  };
 }
 
 function carregarDadosTrimestrais() {
@@ -208,13 +194,7 @@ function carregarDadosTrimestrais() {
   if (!trimestre) return;
 
   mostrarLoading();
-  let urlTrim = `${API_URL}?tipo=indicadoresTrimestrais&email=${encodeURIComponent(emailUsuario)}&trimestre=${trimestre}`;
-  if (perfilUsuario === 'SUPERVISOR') {
-    const escolaSel = document.getElementById('planoTaticoTrimEscola').value;
-    if (!escolaSel) { esconderLoading(); return; }
-    urlTrim += `&escola=${encodeURIComponent(escolaSel)}`;
-  }
-  jsonp(urlTrim, function(dados) {
+  jsonp(`${API_URL}?tipo=indicadoresTrimestrais&email=${encodeURIComponent(emailUsuario)}&trimestre=${trimestre}`, function(dados) {
     esconderLoading();
     if (dados && !dados.erro) {
       document.getElementById('ptrimEstrategiasIntervencao').value = dados.estrategiasIntervencao || '';
@@ -480,6 +460,35 @@ function renderizarTabelaAcompanhamento(dados) {
   html += '</div>';
   html += '<p style="font-size:11px; color:#94a3b8; margin-top:12px;">Passe o mouse sobre as siglas para ver o significado. 📎 = evidência anexada.</p>';
   container.innerHTML = html;
+}
+function abrirModalPlanoTaticoTrimestral() {
+  if (!algumPerfilUsuario(['PEDAGOGICO', 'SUPERVISOR'])) {
+    mostrarToast('Acesso restrito a pedagogos e supervisores.', 'warning');
+    return;
+  }
+
+  document.getElementById('modalPlanoTaticoTrimestral').style.display = 'flex';
+
+  // Limpa campos
+  document.getElementById('planoTaticoTrimestre').value = '';
+  document.getElementById('ptrimEstrategiasIntervencao').value = '';
+  document.getElementById('ptrimRpePortugues').value = '';
+  document.getElementById('ptrimRpeMatematica').value = '';
+  document.getElementById('ptrimAcoesPedagogicas').value = '';
+  document.getElementById('ptrimFormacaoLP').value = '';
+  document.getElementById('ptrimFormacaoMAT').value = '';
+
+  if (perfilUsuario === 'SUPERVISOR') {
+    document.getElementById('planoTaticoTrimEscolaWrapper').style.display = 'block';
+    preencherSelectEscolasPlanoTaticoTrim();
+  } else {
+    document.getElementById('planoTaticoTrimEscolaWrapper').style.display = 'none';
+  }
+
+  // Carrega dados ao selecionar trimestre
+  document.getElementById('planoTaticoTrimestre').onchange = function() {
+    carregarDadosTrimestrais();
+  };
 }
 // =========================
 // UPLOAD DE EVIDÊNCIAS
