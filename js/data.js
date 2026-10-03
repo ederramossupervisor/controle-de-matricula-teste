@@ -251,28 +251,9 @@ function continuarCarregamentoAlunos(pagina, filtros, tentativa = 0) {
       if (filtroSituacao) filtroSituacao.style.display = 'none';
     }
 
-    const btnGerador = document.getElementById('btnGeradorDocumentos');
-    if (btnGerador && perfilUsuario === 'SUPERVISOR') {
-      btnGerador.style.display = 'block';
-    }
-
     const btnDadosEscola = document.getElementById('btnDadosEscola');
     if (btnDadosEscola) {
       btnDadosEscola.style.display = (perfilUsuario === 'SUPERVISOR' || perfilUsuario === 'SECRETARIA') ? 'inline-block' : 'none';
-    }
-
-    // Botões do Plano Tático
-    const botoesPlano = ['btnPlanoTatico', 'btnPlanoTaticoTrim'];
-    botoesPlano.forEach(id => {
-      const btn = document.getElementById(id);
-      if (btn) {
-        btn.style.display = algumPerfilUsuario(['PEDAGOGICO', 'SUPERVISOR']) ? 'block' : 'none';
-      }
-    });
-
-    const btnAcomp = document.getElementById('btnAcompanhamentoPT');
-    if (btnAcomp) {
-      btnAcomp.style.display = (perfilUsuario === 'SUPERVISOR') ? 'block' : 'none';
     }
 
     const btnAprovacao = document.getElementById('btnAprovacaoTermos');
@@ -310,7 +291,6 @@ function continuarCarregamentoAlunos(pagina, filtros, tentativa = 0) {
     if (!secaoTemBotoesVisiveis('menuColunaAlunos')) esconderColunaMenu('menuColunaAlunos');
     if (!secaoTemBotoesVisiveis('menuColunaDocs')) esconderColunaMenu('menuColunaDocs');
     if (!secaoTemBotoesVisiveis('menuColunaGestao')) esconderColunaMenu('menuColunaGestao');
-    if (!secaoTemBotoesVisiveis('menuColunaPlanoTatico')) esconderColunaMenu('menuColunaPlanoTatico');
     if (!secaoTemBotoesVisiveis('menuColunaAdmin')) esconderColunaMenu('menuColunaAdmin');
 
     esconderLoading();
