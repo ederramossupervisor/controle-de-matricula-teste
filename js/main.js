@@ -112,10 +112,6 @@ function obterModaisEPaginasAbertos() {
     { element: document.getElementById('modalPromocao'), close: fecharModalPromocao },
     { element: document.getElementById('modalAtualizarMatriculados'), close: fecharModalAtualizarMatriculados },
     { element: document.getElementById('modalConsentimento'), close: logout }, // logout fecha o consentimento
-    { element: document.getElementById('modalGeradorDocumentos'), close: fecharModalGeradorDocumentos },
-    { element: document.getElementById('modalPlanoTaticoMensal'), close: fecharModalPlanoTaticoMensal },
-    { element: document.getElementById('modalPlanoTaticoTrimestral'), close: fecharModalPlanoTaticoTrimestral },
-    { element: document.getElementById('modalAcompanhamentoPT'), close: fecharModalAcompanhamentoPT },
 
     // Pais (listas e modais principais)
     { element: document.getElementById('modalDetalhes'), close: fecharModalDetalhes },
