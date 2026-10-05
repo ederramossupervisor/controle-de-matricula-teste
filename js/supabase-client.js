@@ -147,7 +147,9 @@ async function listarUsuariosSb() {
 }
 
 async function chamarAdminUsuarios(payload) {
-  const { data, error } = await sb.functions.invoke('admin-usuarios', { body: payload });
+  // o link de senha enviado por e-mail volta para o endereço de onde a pessoa está usando o sistema
+  const corpo = Object.assign({ redirectTo: window.location.origin + window.location.pathname }, payload);
+  const { data, error } = await sb.functions.invoke('admin-usuarios', { body: corpo });
   if (error) {
     let msg = error.message;
     try { const j = await error.context.json(); msg = j.msg || msg; } catch (_) {}
