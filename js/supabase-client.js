@@ -1042,6 +1042,18 @@ async function listarNotificacoesSb() {
   });
 }
 
+// Chamadas ao Apps Script que exigem login: o token da sessão vai junto e é conferido lá
+function chamarApsComToken(u) {
+  return new Promise(async function (resolve, reject) {
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) { resolve({ erro: 'Sessão expirada. Entre novamente.' }); return; }
+      u.searchParams.set('token', session.access_token);
+      _jsonpLegado(u.toString(), resolve);
+    } catch (e) { reject(e); }
+  });
+}
+
 const _jsonpLegado = jsonp;
 const ROTAS_JSONP_SB = {
   verificarConsentimento: function () { return consentimentoSb(); },
@@ -1073,17 +1085,9 @@ const ROTAS_JSONP_SB = {
   fotoPerfil: function () { return fotoPerfilSb(); },
   historicoMonitoramento: function (u) { return historicoMonitoramentoSb(u); },
   detalhesMonitoramento: function (u) { return detalhesMonitoramentoSb(u); },
-  // Histórico escolar: gerado pelo Apps Script, que consulta o Supabase com o login desta pessoa
-  gerarHistorico: function (u) {
-    return new Promise(async function (resolve, reject) {
-      try {
-        const { data: { session } } = await sb.auth.getSession();
-        if (!session) { resolve({ erro: 'Sessão expirada. Entre novamente.' }); return; }
-        u.searchParams.set('token', session.access_token);
-        _jsonpLegado(u.toString(), resolve);
-      } catch (e) { reject(e); }
-    });
-  },
+  // Histórico escolar e termo em PDF: gerados pelo Apps Script, que confere o login desta pessoa no Supabase
+  gerarHistorico: function (u) { return chamarApsComToken(u); },
+  gerarTermoPDF: function (u) { return chamarApsComToken(u); },
   processos: function (u) { return listarProcessosSb(u); },
   documentos: function (u) { return listarDocumentosSb(u); },
   listarTiposProcesso: async function (u) {
